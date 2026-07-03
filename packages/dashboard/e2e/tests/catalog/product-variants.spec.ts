@@ -982,3 +982,65 @@ test.describe('variant with no option groups', () => {
         await page.close();
     });
 });
+
+// OSS-567 — the form engine must submit only the fields the user actually
+// changed, so an untouched field's stale page-load value cannot silently
+// overwrite a concurrent edit by another admin or the API.
+test.describe('variant update sends only changed fields (OSS-567)', () => {
+    test('editing only the SKU submits just id + sku', async ({ page }) => {
+        // Open a Laptop variant detail page (seed data — has facets, assets, translations).
+        await page.goto('/product-variants');
+        await expect(page.getByRole('heading', { name: 'Product Variants' })).toBeVisible({
+            timeout: 10_000,
+        });
+        await page
+            .locator('table')
+            .getByRole('button', { name: /Laptop/ })
+            .first()
+            .click();
+        await expect(page).toHaveURL(/\/product-variants\/[^/]+$/);
+
+        // Locate the SKU field on the detail form and change only that.
+        const skuField = page
+            .getByRole('main')
+            .locator('[data-slot="field"]')
+            .filter({
+                has: page.locator('[data-slot="field-label"]').getByText('SKU', { exact: true }),
+            })
+            .getByRole('textbox');
+        await expect(skuField).toBeVisible({ timeout: 10_000 });
+        const newSku = `OSS567-${Date.now()}`;
+        await skuField.fill(newSku);
+
+        // Capture the update mutation payload. `mutation UpdateProductVariant(` (with the
+        // paren) avoids matching the plural `UpdateProductVariants` mutation.
+        const updateRequest = page.waitForRequest(
+            req =>
+                req.method() === 'POST' && (req.postData() ?? '').includes('mutation UpdateProductVariant('),
+            { timeout: 15_000 },
+        );
+        await page.getByRole('button', { name: 'Update' }).click();
+        const request = await updateRequest;
+        const input = request.postDataJSON()?.variables?.input;
+
+        // Only the non-nullable id and the changed sku should be present — every other
+        // replace-semantics field (facetValueIds, assetIds, trackInventory, translations,
+        // price, …) must be omitted.
+        expect(input).toBeTruthy();
+        expect(Object.keys(input).sort()).toEqual(['id', 'sku']);
+        expect(input.sku).toBe(newSku);
+        expect(input.facetValueIds).toBeUndefined();
+        expect(input.assetIds).toBeUndefined();
+        expect(input.trackInventory).toBeUndefined();
+        expect(input.translations).toBeUndefined();
+        expect(input.price).toBeUndefined();
+
+        // Confirm the save succeeded.
+        await expect(
+            page
+                .locator('[data-sonner-toast]')
+                .filter({ hasText: /updated/i })
+                .first(),
+        ).toBeVisible({ timeout: 10_000 });
+    });
+});

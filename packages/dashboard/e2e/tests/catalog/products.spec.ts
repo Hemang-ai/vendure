@@ -48,9 +48,9 @@ test.describe('Product detail features', () => {
 
         // Enabled switch lives in the action bar, not in a sidebar field
         await expect(page.getByTestId('product-enabled-switch')).toBeVisible();
-        await expect(
-            page.locator('[data-slot="field-label"]').filter({ hasText: /^Enabled$/ }),
-        ).toHaveCount(0);
+        await expect(page.locator('[data-slot="field-label"]').filter({ hasText: /^Enabled$/ })).toHaveCount(
+            0,
+        );
 
         // Facet Values block
         await expect(
@@ -288,10 +288,9 @@ async function cleanupVariantEditorProduct(
     optionGroupId: string,
 ) {
     await client.gql(`mutation ($id: ID!) { deleteProduct(id: $id) { result } }`, { id: productId });
-    await client.gql(
-        `mutation ($id: ID!) { deleteProductOptionGroup(id: $id, force: true) { result } }`,
-        { id: optionGroupId },
-    );
+    await client.gql(`mutation ($id: ID!) { deleteProductOptionGroup(id: $id, force: true) { result } }`, {
+        id: optionGroupId,
+    });
 }
 
 // The Manage variants page is now an inline editor: every option cell renders as an
@@ -304,10 +303,7 @@ test.describe('Manage variants inline editing', () => {
         const client = new VendureAdminClient(page);
         await client.login();
         const unique = Date.now();
-        const { productId, optionGroupId, smallOptionId } = await createVariantEditorProduct(
-            client,
-            unique,
-        );
+        const { productId, optionGroupId, smallOptionId } = await createVariantEditorProduct(client, unique);
 
         try {
             const variantId = await createVariantEditorVariant(
@@ -362,8 +358,10 @@ test.describe('Manage variants inline editing', () => {
         const client = new VendureAdminClient(page);
         await client.login();
         const unique = Date.now();
-        const { productId, optionGroupId, smallOptionId, largeOptionId } =
-            await createVariantEditorProduct(client, unique);
+        const { productId, optionGroupId, smallOptionId, largeOptionId } = await createVariantEditorProduct(
+            client,
+            unique,
+        );
 
         try {
             const smallVariantId = await createVariantEditorVariant(
@@ -458,8 +456,14 @@ test.describe('Manage variants inline editing', () => {
                         code: `size-${unique}`,
                         translations: [{ languageCode: 'en', name: 'Size' }],
                         options: [
-                            { code: `small-${unique}`, translations: [{ languageCode: 'en', name: 'Small' }] },
-                            { code: `large-${unique}`, translations: [{ languageCode: 'en', name: 'Large' }] },
+                            {
+                                code: `small-${unique}`,
+                                translations: [{ languageCode: 'en', name: 'Small' }],
+                            },
+                            {
+                                code: `large-${unique}`,
+                                translations: [{ languageCode: 'en', name: 'Large' }],
+                            },
                         ],
                     },
                 },
@@ -561,5 +565,52 @@ test.describe('Manage variants inline editing', () => {
                 );
             }
         }
+    });
+});
+
+// OSS-567 — the changed-fields-only update behaviour is framework-wide, not just
+// the variant page. Editing only the (translated) product name must send just
+// `id` + `translations`, leaving replace-semantics fields (facetValueIds, assetIds,
+// enabled) untouched so they can't clobber a concurrent edit.
+test.describe('product update sends only changed fields (OSS-567)', () => {
+    test('editing only the name submits just id + translations', async ({ page }) => {
+        await page.goto('/products');
+        await expect(page.locator('table')).toBeVisible();
+        await page.getByPlaceholder('Filter...').fill('Laptop');
+        await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
+        await page.locator('table tbody tr').first().getByRole('button').first().click();
+        await expect(page).toHaveURL(/\/products\/.+/);
+
+        const nameField = page
+            .getByRole('main')
+            .locator('[data-slot="field"]')
+            .filter({
+                has: page.locator('[data-slot="field-label"]').getByText('Product name', { exact: true }),
+            })
+            .getByRole('textbox');
+        await expect(nameField).toBeVisible({ timeout: 10_000 });
+        const newName = `Laptop OSS567 ${Date.now()}`;
+        await nameField.fill(newName);
+
+        const updateRequest = page.waitForRequest(
+            req => req.method() === 'POST' && (req.postData() ?? '').includes('mutation UpdateProduct('),
+            { timeout: 15_000 },
+        );
+        await page.getByRole('button', { name: 'Update' }).click();
+        const input = (await updateRequest).postDataJSON()?.variables?.input;
+
+        expect(input).toBeTruthy();
+        expect(Object.keys(input).sort()).toEqual(['id', 'translations']);
+        expect(input.facetValueIds).toBeUndefined();
+        expect(input.assetIds).toBeUndefined();
+        expect(input.enabled).toBeUndefined();
+        expect(input.translations?.[0]?.name).toBe(newName);
+
+        await expect(
+            page
+                .locator('[data-sonner-toast]')
+                .filter({ hasText: /updated/i })
+                .first(),
+        ).toBeVisible({ timeout: 10_000 });
     });
 });

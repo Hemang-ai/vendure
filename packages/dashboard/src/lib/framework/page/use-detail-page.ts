@@ -25,7 +25,11 @@ import {
     getMutationName,
     getQueryName,
 } from '../document-introspection/get-document-structure.js';
-import { useGeneratedForm, WithLooseCustomFields } from '../form-engine/use-generated-form.js';
+import {
+    GeneratedFormSubmitMeta,
+    useGeneratedForm,
+    WithLooseCustomFields,
+} from '../form-engine/use-generated-form.js';
 
 import { DetailEntityPath } from './page-types.js';
 
@@ -131,6 +135,18 @@ export interface DetailPageOptions<
      * @since 3.7.0
      */
     extendSchema?: (schema: ZodObject<any>) => ZodTypeAny;
+    /**
+     * @description
+     * By default, update mutations only send the fields the user actually changed,
+     * so that an untouched field's stale page-load value cannot silently overwrite
+     * a concurrent change made by another admin or via the API. Set this to `true`
+     * to restore the previous behaviour of always sending the full form payload on
+     * update (e.g. if a custom update mutation relies on receiving unchanged fields).
+     *
+     * @default false
+     * @since 3.8.0
+     */
+    sendAllFieldsOnUpdate?: boolean;
     /**
      * @description
      * The function to call when the update is successful.
@@ -287,6 +303,7 @@ export function useDetailPage<
         transformCreateInput,
         transformUpdateInput,
         extendSchema,
+        sendAllFieldsOnUpdate,
         params,
         entityField,
         entityName,
@@ -349,14 +366,25 @@ export function useDetailPage<
         customFieldConfig,
         extendSchema,
         setValues: setValuesForUpdate,
-        onSubmit(values: any) {
+        onSubmit(values: any, meta?: GeneratedFormSubmitMeta) {
             const filteredValues = removeReadonlyAndLocalizedCustomFields(values, customFieldConfig || []);
 
             if (isNew) {
                 const finalInput = transformCreateInput?.(filteredValues) ?? filteredValues;
                 createMutation.mutate({ input: finalInput });
             } else {
-                const finalInput = transformUpdateInput?.(filteredValues) ?? filteredValues;
+                // Only send the fields the user actually changed (plus non-nullable
+                // fields, which `changedFields` always includes), so an untouched
+                // field's stale value cannot overwrite a concurrent edit. Opt out
+                // via `sendAllFieldsOnUpdate`.
+                const changedFields = meta?.changedFields;
+                const prunedValues =
+                    !sendAllFieldsOnUpdate && changedFields
+                        ? Object.fromEntries(
+                              Object.entries(filteredValues).filter(([key]) => changedFields.has(key)),
+                          )
+                        : filteredValues;
+                const finalInput = transformUpdateInput?.(prunedValues) ?? prunedValues;
                 updateMutation.mutate({ input: finalInput });
             }
         },

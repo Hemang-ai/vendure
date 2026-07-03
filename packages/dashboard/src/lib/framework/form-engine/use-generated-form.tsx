@@ -13,11 +13,29 @@ import {
 } from './form-schema-tools.js';
 import {
     convertEmptyStringsToNull,
+    getChangedTopLevelFields,
     removeEmptyIdFields,
     stripNullNullableFields,
     stripUntouchedTranslations,
     transformRelationFields,
 } from './utils.js';
+
+/**
+ * @description
+ * Metadata passed as the second argument to a {@link GeneratedFormOptions} `onSubmit`
+ * handler, describing the outcome of the form submission.
+ *
+ * @since 3.8.0
+ */
+export interface GeneratedFormSubmitMeta {
+    /**
+     * @description
+     * The set of top-level input field names the user actually changed relative to
+     * the loaded entity (plus non-nullable fields which are always included).
+     * `undefined` when creating a new entity (there is no baseline to diff against).
+     */
+    changedFields?: ReadonlySet<string>;
+}
 
 // Stable empty array reference used as a fallback when the server config
 // (and therefore `availableLanguages`) has not yet loaded — keeps memo
@@ -93,6 +111,7 @@ export interface GeneratedFormOptions<
     >;
     onSubmit?: (
         values: VarName extends keyof VariablesOf<T> ? VariablesOf<T>[VarName] : VariablesOf<T>,
+        meta?: GeneratedFormSubmitMeta,
     ) => void;
 }
 
@@ -229,9 +248,9 @@ export function useGeneratedForm<
                 return;
             }
 
-            const onSubmitWrapper = (values: any) => {
+            const onSubmitWrapper = (rawValues: any) => {
                 let processed = convertEmptyStringsToNull(
-                    removeEmptyIdFields(values, updateFields),
+                    removeEmptyIdFields(rawValues, updateFields),
                     updateFields,
                 );
                 // Drop translation rows the form seeded for languages the user never filled,
@@ -240,7 +259,18 @@ export function useGeneratedForm<
                 if (!entity) {
                     processed = stripNullNullableFields(processed, updateFields);
                 }
-                onSubmit(processed);
+                // Compute which top-level fields actually changed relative to the
+                // loaded entity, so that consumers (e.g. useDetailPage) can omit
+                // untouched fields from update mutations and avoid clobbering
+                // concurrent edits. Diff the raw values against the `values` memo,
+                // which is the exact baseline the form was last reset to. Only
+                // meaningful for updates (an existing entity provides the baseline).
+                const meta: GeneratedFormSubmitMeta = {
+                    changedFields: entity
+                        ? getChangedTopLevelFields(rawValues, values, updateFields)
+                        : undefined,
+                };
+                onSubmit(processed, meta);
             };
             form.handleSubmit(onSubmitWrapper)(event);
         };
