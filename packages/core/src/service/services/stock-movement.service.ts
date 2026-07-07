@@ -161,8 +161,10 @@ export class StockMovementService {
         const globalTrackInventory = (await this.globalSettingsService.getSettings(ctx)).trackInventory;
         let orderForEvent: Order | undefined;
         for (const { orderLineId, quantity } of lines) {
+            // Load 'order' relation only for the first line — all lines share the same order.
+            const relations = orderForEvent ? [] : ['order'];
             const orderLine = await this.connection.getEntityOrThrow(ctx, OrderLine, orderLineId, {
-                relations: ['order'],
+                relations,
             });
             if (!orderForEvent) {
                 orderForEvent = orderLine.order;
@@ -191,7 +193,10 @@ export class StockMovementService {
                 if (!(e instanceof LockNotSupportedOnGivenDriverError)) {
                     throw e;
                 }
-                // SQLite serializes writes at the engine level — proceed without the lock
+                // SQLite does not support pessimistic locking. SQLite is single-writer in practice,
+                // so a concurrent write surfaces as SQLITE_BUSY rather than a silent lost update.
+                // This is not the same row-lock guarantee as Postgres/MySQL; SQLite is not
+                // recommended for concurrent production use.
             }
             const allocationLocations = await this.stockLocationService.getAllocationLocations(
                 ctx,

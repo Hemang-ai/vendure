@@ -1336,8 +1336,7 @@ describe('Stock control', () => {
 
             const productAfterCancel = await getProductWithStockMovement('T_2');
             const variantAfterCancel = productAfterCancel!.variants[2];
-            // stockAllocated must be 0, not negative
-            expect(variantAfterCancel.stockAllocated).toBeGreaterThanOrEqual(0);
+            // stockAllocated must be exactly 0: started at 3, one Release of 3 → 0
             expect(variantAfterCancel.stockAllocated).toBe(0);
         });
 
@@ -1382,8 +1381,9 @@ describe('Stock control', () => {
 
             const productAfterFulfill = await getProductWithStockMovement('T_2');
             const variantAfterFulfill = productAfterFulfill!.variants[2];
-            expect(variantAfterFulfill.stockAllocated).toBeGreaterThanOrEqual(0);
-            expect(variantAfterFulfill.stockOnHand).toBeGreaterThanOrEqual(0);
+            // Sale deducts: stockAllocated 2→0, stockOnHand 2→0; clamp must not go negative
+            expect(variantAfterFulfill.stockAllocated).toBe(0);
+            expect(variantAfterFulfill.stockOnHand).toBe(0);
         });
     });
 
@@ -1522,21 +1522,22 @@ describe('Stock control', () => {
             const orderA = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
             orderGuard.assertSuccess(orderA);
 
-            // Assert stockAllocated did not exceed stockOnHand (no oversell)
+            // Assert no oversell: Order B took all 20; Order A gets 0 additional allocation.
+            // stockOnHand stays 20 (only allocations changed, not sales); stockAllocated = 20.
             const productAfterA = await getProductWithStockMovement('T_1');
             const variantAfterA = productAfterA!.variants.find(v => v.id === variantId);
-            expect(variantAfterA!.stockOnHand).toBeGreaterThanOrEqual(0);
-            expect(variantAfterA!.stockAllocated).toBeLessThanOrEqual(variantAfterA!.stockOnHand);
+            expect(variantAfterA!.stockOnHand).toBe(20);
+            expect(variantAfterA!.stockAllocated).toBe(20);
 
             // Assert StockShortfallEvent was published for Order A
             const shortfallEvent = await shortfallEventPromise;
-            expect(shortfallEvent).toBeDefined();
             // order.id in the event is the raw DB id; orderA.id from GraphQL is prefixed ('T_N').
             // Verify they refer to the same record by checking the order code.
             expect(shortfallEvent.order.code).toBe(orderA.code);
             expect(shortfallEvent.shortfalls.length).toBeGreaterThan(0);
             expect(shortfallEvent.shortfalls[0].requested).toBe(5);
-            expect(shortfallEvent.shortfalls[0].allocated).toBeLessThan(5);
+            // Order B allocated all 20 units; Order A's allocation delta is 0
+            expect(shortfallEvent.shortfalls[0].allocated).toBe(0);
         });
     });
 });

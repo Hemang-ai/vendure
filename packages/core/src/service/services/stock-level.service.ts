@@ -106,7 +106,17 @@ export class StockLevelService {
                 if (!(e instanceof LockNotSupportedOnGivenDriverError)) {
                     throw e;
                 }
-                // SQLite serializes writes at the engine level — proceed without the lock
+                // SQLite does not support pessimistic locking. SQLite is single-writer in practice,
+                // so a concurrent write surfaces as SQLITE_BUSY (an error) rather than a silent
+                // lost update. This is not the same row-lock guarantee as Postgres/MySQL; SQLite
+                // is not recommended for concurrent production use.
+                //
+                // Note: if no StockLevel row exists yet (new variant), both the lock path and this
+                // fallback cannot protect against a concurrent insert race. Two threads could both
+                // enter the !stockLevel branch and collide on the unique (productVariantId,
+                // stockLocationId) index. Variants normally receive a StockLevel row at creation,
+                // making this an edge case; a unique-constraint violation safely rolls back the
+                // transaction rather than producing an oversell.
                 stockLevel = await repo.findOne({ where: { productVariantId, stockLocationId } });
             }
             if (!stockLevel) {
@@ -150,7 +160,10 @@ export class StockLevelService {
                 if (!(e instanceof LockNotSupportedOnGivenDriverError)) {
                     throw e;
                 }
-                // SQLite serializes writes at the engine level — proceed without the lock
+                // SQLite does not support pessimistic locking. SQLite is single-writer in practice,
+                // so a concurrent write surfaces as SQLITE_BUSY rather than a silent lost update.
+                // This is not the same row-lock guarantee as Postgres/MySQL; SQLite is not
+                // recommended for concurrent production use.
                 stockLevel = await repo.findOne({ where: { productVariantId, stockLocationId } });
             }
             if (stockLevel) {
