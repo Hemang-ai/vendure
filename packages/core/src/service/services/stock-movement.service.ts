@@ -6,7 +6,7 @@ import {
     StockMovementListOptions,
 } from '@vendure/common/lib/generated-types';
 import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
-import { In } from 'typeorm';
+import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { Instrument } from '../../common/instrument-decorator';
@@ -14,10 +14,11 @@ import { idsAreEqual } from '../../common/utils';
 import { ShippingCalculator } from '../../config/shipping-method/shipping-calculator';
 import { ShippingEligibilityChecker } from '../../config/shipping-method/shipping-eligibility-checker';
 import { TransactionalConnection } from '../../connection/transactional-connection';
-import { Order } from '../../entity/order/order.entity';
 import { OrderLine } from '../../entity/order-line/order-line.entity';
+import { Order } from '../../entity/order/order.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { ShippingMethod } from '../../entity/shipping-method/shipping-method.entity';
+import { StockLevel } from '../../entity/stock-level/stock-level.entity';
 import { Allocation } from '../../entity/stock-movement/allocation.entity';
 import { Cancellation } from '../../entity/stock-movement/cancellation.entity';
 import { Release } from '../../entity/stock-movement/release.entity';
@@ -26,6 +27,7 @@ import { StockAdjustment } from '../../entity/stock-movement/stock-adjustment.en
 import { StockMovement } from '../../entity/stock-movement/stock-movement.entity';
 import { EventBus } from '../../event-bus/event-bus';
 import { StockMovementEvent } from '../../event-bus/events/stock-movement-event';
+import { StockShortfall, StockShortfallEvent } from '../../event-bus/events/stock-shortfall-event';
 import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-builder';
 
 import { GlobalSettingsService } from './global-settings.service';
@@ -155,20 +157,56 @@ export class StockMovementService {
         lines: OrderLineInput[],
     ): Promise<Allocation[]> {
         const allocations: Allocation[] = [];
+        const shortfalls: StockShortfall[] = [];
         const globalTrackInventory = (await this.globalSettingsService.getSettings(ctx)).trackInventory;
+        let orderForEvent: Order | undefined;
         for (const { orderLineId, quantity } of lines) {
-            const orderLine = await this.connection.getEntityOrThrow(ctx, OrderLine, orderLineId);
+            const orderLine = await this.connection.getEntityOrThrow(ctx, OrderLine, orderLineId, {
+                relations: ['order'],
+            });
+            if (!orderForEvent) {
+                orderForEvent = orderLine.order;
+            }
             const productVariant = await this.connection.getEntityOrThrow(
                 ctx,
                 ProductVariant,
                 orderLine.productVariantId,
                 { includeSoftDeleted: true },
             );
+            // Acquire a pessimistic write lock on this variant's StockLevel rows before
+            // the strategy reads them. This serializes concurrent allocations for the same
+            // variant so the strategy's availability read is fresh (in MySQL REPEATABLE READ
+            // the locking read acts as the re-check). The entire method runs inside the
+            // order-state transition's withTransaction, so the lock is held until commit.
+            try {
+                await this.connection
+                    .getRepository(ctx, StockLevel)
+                    .createQueryBuilder('stockLevel')
+                    .setLock('pessimistic_write')
+                    .where('stockLevel.productVariantId = :productVariantId', {
+                        productVariantId: orderLine.productVariantId,
+                    })
+                    .getMany();
+            } catch (e) {
+                if (!(e instanceof LockNotSupportedOnGivenDriverError)) {
+                    throw e;
+                }
+                // SQLite serializes writes at the engine level — proceed without the lock
+            }
             const allocationLocations = await this.stockLocationService.getAllocationLocations(
                 ctx,
                 orderLine,
                 quantity,
             );
+            const allocatedForLine = allocationLocations.reduce((sum, l) => sum + l.quantity, 0);
+            if (allocatedForLine < quantity) {
+                shortfalls.push({
+                    productVariantId: orderLine.productVariantId,
+                    orderLineId: orderLine.id,
+                    requested: quantity,
+                    allocated: allocatedForLine,
+                });
+            }
             for (const allocationLocation of allocationLocations) {
                 const allocation = new Allocation({
                     productVariant: new ProductVariant({ id: orderLine.productVariantId }),
@@ -191,6 +229,9 @@ export class StockMovementService {
         const savedAllocations = await this.connection.getRepository(ctx, Allocation).save(allocations);
         if (savedAllocations.length) {
             await this.eventBus.publish(new StockMovementEvent(ctx, savedAllocations));
+        }
+        if (shortfalls.length && orderForEvent) {
+            await this.eventBus.publish(new StockShortfallEvent(ctx, orderForEvent, shortfalls));
         }
         return savedAllocations;
     }

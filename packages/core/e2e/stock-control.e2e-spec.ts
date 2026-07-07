@@ -10,14 +10,17 @@ import {
 import { pick } from '@vendure/common/lib/pick';
 import {
     DefaultOrderPlacedStrategy,
+    EventBus,
     manualFulfillmentHandler,
     mergeConfig,
     type Order,
     type OrderState,
     type RequestContext,
+    StockShortfallEvent,
 } from '@vendure/core';
 import { createErrorResultGuard, createTestEnvironment, type ErrorResultGuard } from '@vendure/testing';
 import path from 'path';
+import { firstValueFrom, timeout } from 'rxjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { initialData } from '../../../e2e-common/e2e-initial-data';
@@ -1454,6 +1457,86 @@ describe('Stock control', () => {
             expect((transitionOrderToState as any).transitionError).toBe(
                 'Cannot transition Order to the "ArrangingPayment" state due to insufficient stock of Laptop 13 inch 8GB',
             );
+        });
+    });
+
+    // OSS-94: lock re-check + shortfall detection at allocation
+    describe('stock shortfall detection when stock depleted between checkout and settlement', () => {
+        // T_3 = "Laptop 13 inch 16GB". Reset to 20 on hand, tracked, threshold=0.
+        const variantId = 'T_3';
+
+        beforeAll(async () => {
+            await adminClient.query(updateProductVariantsDocument, {
+                input: [
+                    {
+                        id: variantId,
+                        stockOnHand: 20,
+                        trackInventory: GlobalFlag.TRUE,
+                        useGlobalOutOfStockThreshold: false,
+                        outOfStockThreshold: 0,
+                    },
+                ],
+            });
+        });
+
+        // #OSS-94 — concurrent settlement must not oversell; StockShortfallEvent must be published
+        it('emits StockShortfallEvent and does not oversell when stock is depleted before settlement', async () => {
+            const eventBus = server.app.get(EventBus);
+
+            // Order A (trevor): add 5 items and reach ArrangingPayment.
+            // Stock check passes because at least 5 units are available at this point.
+            await shopClient.asUserWithCredentials('trevor_donnelly96@hotmail.com', 'test');
+            const { addItemToOrder: addA } = await shopClient.query(addItemToOrderDocument, {
+                productVariantId: variantId,
+                quantity: 5,
+            });
+            orderGuard.assertSuccess(addA);
+            await proceedToArrangingPayment(shopClient);
+
+            // Order B (hayden): deplete all remaining saleable stock and settle.
+            // InsufficientStockError is fine here — it adds as many as available to the cart.
+            // This simulates the concurrent order that "wins" the stock between Order A's
+            // ArrangingPayment check and its payment settlement.
+            await shopClient.asUserWithCredentials('hayden.zieme12@hotmail.com', 'test');
+            await shopClient.query(addItemToOrderDocument, {
+                productVariantId: variantId,
+                quantity: 100, // request more than available; gets capped to available units
+            });
+            await proceedToArrangingPayment(shopClient);
+            const orderB = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
+            orderGuard.assertSuccess(orderB);
+
+            // Verify stock is now fully allocated (stockAllocated = stockOnHand), leaving 0 for Order A
+            const productAfterB = await getProductWithStockMovement('T_1');
+            const variantAfterB = productAfterB!.variants.find(v => v.id === variantId);
+            expect(variantAfterB!.stockAllocated).toBe(variantAfterB!.stockOnHand);
+
+            // Subscribe to StockShortfallEvent BEFORE Order A settles
+            const shortfallEventPromise = firstValueFrom(
+                eventBus.ofType(StockShortfallEvent).pipe(timeout(5000)),
+            );
+
+            // Order A (trevor): settle — stock is fully allocated by Order B, so allocation
+            // must be capped at 0 (or whatever remains).
+            await shopClient.asUserWithCredentials('trevor_donnelly96@hotmail.com', 'test');
+            const orderA = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
+            orderGuard.assertSuccess(orderA);
+
+            // Assert stockAllocated did not exceed stockOnHand (no oversell)
+            const productAfterA = await getProductWithStockMovement('T_1');
+            const variantAfterA = productAfterA!.variants.find(v => v.id === variantId);
+            expect(variantAfterA!.stockOnHand).toBeGreaterThanOrEqual(0);
+            expect(variantAfterA!.stockAllocated).toBeLessThanOrEqual(variantAfterA!.stockOnHand);
+
+            // Assert StockShortfallEvent was published for Order A
+            const shortfallEvent = await shortfallEventPromise;
+            expect(shortfallEvent).toBeDefined();
+            // order.id in the event is the raw DB id; orderA.id from GraphQL is prefixed ('T_N').
+            // Verify they refer to the same record by checking the order code.
+            expect(shortfallEvent.order.code).toBe(orderA.code);
+            expect(shortfallEvent.shortfalls.length).toBeGreaterThan(0);
+            expect(shortfallEvent.shortfalls[0].requested).toBe(5);
+            expect(shortfallEvent.shortfalls[0].allocated).toBeLessThan(5);
         });
     });
 });
