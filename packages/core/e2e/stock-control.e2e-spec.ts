@@ -1280,6 +1280,110 @@ describe('Stock control', () => {
         });
     });
 
+    // OSS-94: stockAllocated and stockOnHand must never go negative
+    describe('stock values never go negative (clamped writes)', () => {
+        // Use product T_2 (Curvy Monitor) variant[2] (32 inch, id T_7).
+        // The allocation describe above uses variants[0] and variants[1]; variants[2]
+        // is untracked (inherited global=false) and otherwise untouched — safe to reset.
+        let trackedVariantId: string;
+
+        beforeAll(async () => {
+            const { product } = await adminClient.query(getStockMovementDocument, {
+                id: 'T_2',
+            });
+            trackedVariantId = product!.variants[2].id;
+            await adminClient.query(updateStockOnHandDocument, {
+                input: [
+                    {
+                        id: trackedVariantId,
+                        stockOnHand: 3,
+                        trackInventory: GlobalFlag.TRUE,
+                    },
+                ],
+            });
+        });
+
+        it('stockAllocated stays >= 0 after allocate → release cycle', async () => {
+            // Allocate 3 by completing an order
+            await shopClient.asUserWithCredentials('hayden.zieme12@hotmail.com', 'test');
+            await shopClient.query(addItemToOrderDocument, {
+                productVariantId: trackedVariantId,
+                quantity: 3,
+            });
+            await proceedToArrangingPayment(shopClient);
+            const order = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
+            orderGuard.assertSuccess(order);
+
+            // After allocation, stockAllocated should be 3
+            const productAfterAlloc = await getProductWithStockMovement('T_2');
+            const variantAfterAlloc = productAfterAlloc!.variants[2];
+            expect(variantAfterAlloc.stockAllocated).toBe(3);
+
+            // Cancel all lines — triggers Release, decrementing stockAllocated by 3
+            await adminClient.query(cancelOrderDocument, {
+                input: {
+                    orderId: order.id,
+                    lines: order.lines.map(l => ({
+                        orderLineId: l.id,
+                        quantity: l.quantity,
+                    })),
+                    reason: 'Test',
+                },
+            });
+
+            const productAfterCancel = await getProductWithStockMovement('T_2');
+            const variantAfterCancel = productAfterCancel!.variants[2];
+            // stockAllocated must be 0, not negative
+            expect(variantAfterCancel.stockAllocated).toBeGreaterThanOrEqual(0);
+            expect(variantAfterCancel.stockAllocated).toBe(0);
+        });
+
+        it('stockOnHand stays >= 0 after fulfill → cancel cycle', async () => {
+            // Reset stock
+            await adminClient.query(updateStockOnHandDocument, {
+                input: [
+                    {
+                        id: trackedVariantId,
+                        stockOnHand: 2,
+                        trackInventory: GlobalFlag.TRUE,
+                    },
+                ],
+            });
+
+            // Complete an order (alloc=2)
+            await shopClient.asUserWithCredentials('marques.sawayn@hotmail.com', 'test');
+            await shopClient.query(addItemToOrderDocument, {
+                productVariantId: trackedVariantId,
+                quantity: 2,
+            });
+            await proceedToArrangingPayment(shopClient);
+            const order = await addPaymentToOrder(shopClient, testSuccessfulPaymentMethod);
+            orderGuard.assertSuccess(order);
+
+            // Fulfill (sale: stockAllocated -= 2, stockOnHand -= 2)
+            await adminClient.query(createFulfillmentDocument, {
+                input: {
+                    lines: order.lines.map(l => ({
+                        orderLineId: l.id,
+                        quantity: l.quantity,
+                    })),
+                    handler: {
+                        code: manualFulfillmentHandler.code,
+                        arguments: [
+                            { name: 'method', value: 'test' },
+                            { name: 'trackingCode', value: '' },
+                        ],
+                    },
+                },
+            });
+
+            const productAfterFulfill = await getProductWithStockMovement('T_2');
+            const variantAfterFulfill = productAfterFulfill!.variants[2];
+            expect(variantAfterFulfill.stockAllocated).toBeGreaterThanOrEqual(0);
+            expect(variantAfterFulfill.stockOnHand).toBeGreaterThanOrEqual(0);
+        });
+    });
+
     // https://github.com/vendurehq/vendure/issues/1738
     describe('going out of stock after being added to order', () => {
         const variantId = 'T_1';

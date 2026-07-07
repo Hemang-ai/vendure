@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ID } from '@vendure/common/lib/shared-types';
+import { LockNotSupportedOnGivenDriverError } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { Instrument } from '../../common/instrument-decorator';
@@ -82,6 +83,8 @@ export class StockLevelService {
     /**
      * @description
      * Updates the `stockOnHand` for the given {@link ProductVariant} and {@link StockLocation}.
+     * The write is atomic: the row is locked before reading to prevent lost updates under concurrency.
+     * When creating a new StockLevel the initial value is clamped at 0 so the row is never born negative.
      */
     async updateStockOnHandForLocation(
         ctx: RequestContext,
@@ -89,32 +92,43 @@ export class StockLevelService {
         stockLocationId: ID,
         change: number,
     ) {
-        const stockLevel = await this.connection.getRepository(ctx, StockLevel).findOne({
-            where: {
-                productVariantId,
-                stockLocationId,
-            },
+        await this.connection.withTransaction(ctx, async txCtx => {
+            const repo = this.connection.getRepository(txCtx, StockLevel);
+            let stockLevel: StockLevel | null;
+            try {
+                stockLevel = await repo
+                    .createQueryBuilder('stockLevel')
+                    .setLock('pessimistic_write')
+                    .where('stockLevel.productVariantId = :productVariantId', { productVariantId })
+                    .andWhere('stockLevel.stockLocationId = :stockLocationId', { stockLocationId })
+                    .getOne();
+            } catch (e) {
+                if (!(e instanceof LockNotSupportedOnGivenDriverError)) {
+                    throw e;
+                }
+                // SQLite serializes writes at the engine level — proceed without the lock
+                stockLevel = await repo.findOne({ where: { productVariantId, stockLocationId } });
+            }
+            if (!stockLevel) {
+                await repo.save(
+                    new StockLevel({
+                        productVariantId,
+                        stockLocationId,
+                        stockOnHand: Math.max(0, change),
+                        stockAllocated: 0,
+                    }),
+                );
+            } else {
+                await repo.update(stockLevel.id, { stockOnHand: stockLevel.stockOnHand + change });
+            }
         });
-        if (!stockLevel) {
-            await this.connection.getRepository(ctx, StockLevel).save(
-                new StockLevel({
-                    productVariantId,
-                    stockLocationId,
-                    stockOnHand: change,
-                    stockAllocated: 0,
-                }),
-            );
-        }
-        if (stockLevel) {
-            await this.connection
-                .getRepository(ctx, StockLevel)
-                .update(stockLevel.id, { stockOnHand: stockLevel.stockOnHand + change });
-        }
     }
 
     /**
      * @description
      * Updates the `stockAllocated` for the given {@link ProductVariant} and {@link StockLocation}.
+     * The write is atomic: the row is locked before reading to prevent lost updates under concurrency.
+     * `stockAllocated` is clamped at 0 so a release can never produce a negative value.
      */
     async updateStockAllocatedForLocation(
         ctx: RequestContext,
@@ -122,16 +136,28 @@ export class StockLevelService {
         stockLocationId: ID,
         change: number,
     ) {
-        const stockLevel = await this.connection.getRepository(ctx, StockLevel).findOne({
-            where: {
-                productVariantId,
-                stockLocationId,
-            },
+        await this.connection.withTransaction(ctx, async txCtx => {
+            const repo = this.connection.getRepository(txCtx, StockLevel);
+            let stockLevel: StockLevel | null;
+            try {
+                stockLevel = await repo
+                    .createQueryBuilder('stockLevel')
+                    .setLock('pessimistic_write')
+                    .where('stockLevel.productVariantId = :productVariantId', { productVariantId })
+                    .andWhere('stockLevel.stockLocationId = :stockLocationId', { stockLocationId })
+                    .getOne();
+            } catch (e) {
+                if (!(e instanceof LockNotSupportedOnGivenDriverError)) {
+                    throw e;
+                }
+                // SQLite serializes writes at the engine level — proceed without the lock
+                stockLevel = await repo.findOne({ where: { productVariantId, stockLocationId } });
+            }
+            if (stockLevel) {
+                await repo.update(stockLevel.id, {
+                    stockAllocated: Math.max(0, stockLevel.stockAllocated + change),
+                });
+            }
         });
-        if (stockLevel) {
-            await this.connection
-                .getRepository(ctx, StockLevel)
-                .update(stockLevel.id, { stockAllocated: stockLevel.stockAllocated + change });
-        }
     }
 }
