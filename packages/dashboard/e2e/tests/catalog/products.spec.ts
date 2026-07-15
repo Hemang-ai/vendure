@@ -573,13 +573,44 @@ test.describe('Manage variants inline editing', () => {
 // `id` + `translations`, leaving replace-semantics fields (facetValueIds, assetIds,
 // enabled) untouched so they can't clobber a concurrent edit.
 test.describe('product update sends only changed fields (OSS-567)', () => {
+    let productId: string;
+
+    // Create a dedicated product instead of editing a seed product: this test
+    // renames and saves, and mutating shared seed data (e.g. the "Laptop"
+    // product) pollutes other specs that assert on it — notably
+    // translation-placeholders, which expects the Laptop name to stay "Laptop".
+    // Seed it with a non-empty `facetValueIds` so the assertion below proves the
+    // unchanged non-empty replace-array is *omitted* (not merely that an empty one is).
+    test.beforeAll(async ({ browser }) => {
+        const page = await browser.newPage();
+        const client = new VendureAdminClient(page);
+        await client.login();
+        const { facetValues } = await client.gql(
+            `query { facetValues(options: { take: 1 }) { items { id } } }`,
+        );
+        const facetValueId = facetValues.items[0].id as string;
+        const { createProduct } = await client.gql(
+            `mutation ($input: CreateProductInput!) { createProduct(input: $input) { id } }`,
+            {
+                input: {
+                    facetValueIds: [facetValueId],
+                    translations: [
+                        {
+                            languageCode: 'en',
+                            name: 'OSS567 Product',
+                            slug: `oss567-product-${Date.now()}`,
+                            description: '',
+                        },
+                    ],
+                },
+            },
+        );
+        productId = createProduct.id;
+        await page.close();
+    });
+
     test('editing only the name submits just id + translations', async ({ page }) => {
-        await page.goto('/products');
-        await expect(page.locator('table')).toBeVisible();
-        await page.getByPlaceholder('Filter...').fill('Laptop');
-        await page.waitForResponse(resp => resp.url().includes('/admin-api') && resp.status() === 200);
-        await page.locator('table tbody tr').first().getByRole('button').first().click();
-        await expect(page).toHaveURL(/\/products\/.+/);
+        await page.goto(`/products/${productId}`);
 
         const nameField = page
             .getByRole('main')
@@ -589,7 +620,7 @@ test.describe('product update sends only changed fields (OSS-567)', () => {
             })
             .getByRole('textbox');
         await expect(nameField).toBeVisible({ timeout: 10_000 });
-        const newName = `Laptop OSS567 ${Date.now()}`;
+        const newName = `OSS567 Product ${Date.now()}`;
         await nameField.fill(newName);
 
         const updateRequest = page.waitForRequest(
@@ -612,5 +643,16 @@ test.describe('product update sends only changed fields (OSS-567)', () => {
                 .filter({ hasText: /updated/i })
                 .first(),
         ).toBeVisible({ timeout: 10_000 });
+    });
+
+    test.afterAll(async ({ browser }) => {
+        if (!productId) return;
+        const page = await browser.newPage();
+        const client = new VendureAdminClient(page);
+        await client.login();
+        await client.gql(`mutation ($id: ID!) { deleteProduct(id: $id) { result } }`, {
+            id: productId,
+        });
+        await page.close();
     });
 });
