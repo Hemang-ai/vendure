@@ -1,7 +1,7 @@
 {
   "id": "core",
   "name": "Vendure Core Documentation",
-  "version": "3.7.0",
+  "version": "3.7.1",
   "vendureVersion": "v3",
   "navigation": [
     {
@@ -218,7 +218,7 @@
           "title": "CLI",
           "slug": "cli",
           "file": "docs/guides/developer-guide/cli/index.mdx",
-          "lastModified": "2026-06-26T15:49:47+02:00"
+          "lastModified": "2026-07-14T11:47:02+02:00"
         },
         {
           "title": "AI-assisted Development",
@@ -254,7 +254,7 @@
           "title": "Migrations",
           "slug": "migrations",
           "file": "docs/guides/developer-guide/migrations/index.mdx",
-          "lastModified": "2026-02-12T16:47:03+01:00"
+          "lastModified": "2026-07-14T11:47:02+02:00"
         },
         {
           "title": "Plugins",
@@ -428,7 +428,7 @@
           "title": "CMS Integration Plugin",
           "slug": "cms-integration-plugin",
           "file": "docs/guides/how-to/cms-integration-plugin/index.mdx",
-          "lastModified": "2026-02-12T16:47:03+01:00"
+          "lastModified": "2026-07-14T11:47:37+02:00"
         },
         {
           "title": "Codegen",
@@ -1544,7 +1544,7 @@
                   "title": "ListQueryBuilder",
                   "slug": "list-query-builder",
                   "file": "docs/reference/typescript-api/data-access/list-query-builder.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-14T10:51:14+02:00"
                 },
                 {
                   "title": "TransactionalConnection",
@@ -2290,37 +2290,37 @@
                   "title": "GenerateMigration",
                   "slug": "generate-migration",
                   "file": "docs/reference/typescript-api/migration/generate-migration.mdx",
-                  "lastModified": "2026-01-28T14:49:21+01:00"
+                  "lastModified": "2026-07-14T11:47:02+02:00"
                 },
                 {
                   "title": "MigrateAssetTranslationData",
                   "slug": "migrate-asset-translation-data",
                   "file": "docs/reference/typescript-api/migration/migrate-asset-translation-data.mdx",
-                  "lastModified": "2026-03-30T12:56:43+02:00"
+                  "lastModified": "2026-07-10T09:53:10+02:00"
                 },
                 {
                   "title": "MigrateProductOptionGroupData",
                   "slug": "migrate-product-option-group-data",
                   "file": "docs/reference/typescript-api/migration/migrate-product-option-group-data.mdx",
-                  "lastModified": "2026-03-06T09:35:25+01:00"
+                  "lastModified": "2026-07-10T09:53:10+02:00"
                 },
                 {
                   "title": "MigrationOptions",
                   "slug": "migration-options",
                   "file": "docs/reference/typescript-api/migration/migration-options.mdx",
-                  "lastModified": "2026-01-28T14:49:21+01:00"
+                  "lastModified": "2026-07-14T11:47:02+02:00"
                 },
                 {
                   "title": "RevertLastMigration",
                   "slug": "revert-last-migration",
                   "file": "docs/reference/typescript-api/migration/revert-last-migration.mdx",
-                  "lastModified": "2026-01-28T14:49:21+01:00"
+                  "lastModified": "2026-07-14T11:47:02+02:00"
                 },
                 {
                   "title": "RunMigrations",
                   "slug": "run-migrations",
                   "file": "docs/reference/typescript-api/migration/run-migrations.mdx",
-                  "lastModified": "2026-01-28T14:49:21+01:00"
+                  "lastModified": "2026-07-14T11:47:02+02:00"
                 }
               ],
               "lastModified": "2026-01-28T14:49:21+01:00"
@@ -2898,7 +2898,7 @@
                   "title": "AssetService",
                   "slug": "asset-service",
                   "file": "docs/reference/typescript-api/services/asset-service.mdx",
-                  "lastModified": "2026-06-29T22:40:46+02:00"
+                  "lastModified": "2026-07-10T17:49:38+02:00"
                 },
                 {
                   "title": "AuthService",
@@ -3548,7 +3548,7 @@
                   "title": "S3AssetStorageStrategy",
                   "slug": "s3asset-storage-strategy",
                   "file": "docs/reference/core-plugins/asset-server-plugin/s3asset-storage-strategy.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-10T09:53:10+02:00"
                 },
                 {
                   "title": "SharpAssetPreviewStrategy",
@@ -4271,7 +4271,7 @@
                   "title": "VendureDashboardPlugin",
                   "slug": "vendure-dashboard-plugin",
                   "file": "docs/reference/dashboard/vite-plugin/vendure-dashboard-plugin.mdx",
-                  "lastModified": "2026-06-30T09:24:24+02:00"
+                  "lastModified": "2026-07-10T14:29:40+02:00"
                 }
               ],
               "lastModified": "2026-01-28T14:49:21+01:00"
