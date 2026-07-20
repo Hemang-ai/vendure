@@ -1,6 +1,6 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial } from '@vendure/common/lib/shared-types';
-import { Column, Entity, Index, ManyToOne } from 'typeorm';
+import { Column, Entity, Index, ManyToOne, Unique } from 'typeorm';
 
 import { Translation } from '../../common/types/locale-types';
 import { HasCustomFields } from '../../config/custom-field/custom-field-types';
@@ -10,6 +10,7 @@ import { CustomPromotionFieldsTranslation } from '../custom-entity-fields';
 import { Promotion } from './promotion.entity';
 
 @Entity()
+@Unique(['languageCode', 'base'])
 export class PromotionTranslation extends VendureEntity implements Translation<Promotion>, HasCustomFields {
     constructor(input?: DeepPartial<Translation<Promotion>>) {
         super(input);

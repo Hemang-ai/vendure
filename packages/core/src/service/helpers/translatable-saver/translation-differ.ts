@@ -5,6 +5,7 @@ import { InternalServerError } from '../../../common/error/errors';
 import { Translatable, Translation, TranslationInput } from '../../../common/types/locale-types';
 import { foundIn, not } from '../../../common/utils';
 import { TransactionalConnection } from '../../../connection/transactional-connection';
+import { isUniqueConstraintViolationError } from '../utils/db-errors';
 
 export type TranslationContructor<T> = new (
     input?: DeepPartial<TranslationInput<T>> | DeepPartial<Translation<T>>,
@@ -72,7 +73,27 @@ export class TranslationDiffer<Entity extends Translatable & { id: ID }> {
                         .getRepository(ctx, this.translationCtor)
                         .save(translation as any);
                 } catch (err: any) {
-                    throw new InternalServerError(err.message);
+                    if (!isUniqueConstraintViolationError(err)) {
+                        throw new InternalServerError(err.message);
+                    }
+                    // A concurrent request already inserted a translation for this languageCode
+                    // between our initial lookup and this insert. Update that row instead of
+                    // failing the request and leaving the entity without this translation.
+                    const concurrentlyInserted = await this.connection
+                        .getRepository(ctx, this.translationCtor)
+                        .findOne({
+                            where: {
+                                base: { id: entity.id },
+                                languageCode: translation.languageCode,
+                            },
+                        } as any);
+                    if (!concurrentlyInserted) {
+                        throw new InternalServerError(err.message);
+                    }
+                    translation.id = concurrentlyInserted.id;
+                    newTranslation = await this.connection
+                        .getRepository(ctx, this.translationCtor)
+                        .save(translation as any);
                 }
                 entity.translations.push(newTranslation);
             }

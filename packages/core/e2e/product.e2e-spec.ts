@@ -1064,6 +1064,47 @@ describe('Product resolver', () => {
             ),
         );
 
+        // #4884 — concurrent updates adding the same not-yet-existing language must not
+        // create two translation rows for that (product, languageCode) pair
+        it('concurrent updates adding the same new language do not create duplicate translations', async () => {
+            const { createProduct } = await adminClient.query(createProductDocument, {
+                input: {
+                    translations: [
+                        {
+                            languageCode: LanguageCode.en,
+                            name: 'en Concurrent Potato',
+                            slug: 'en-concurrent-potato',
+                            description: 'A potato',
+                        },
+                    ],
+                },
+            });
+
+            const input = {
+                id: createProduct.id,
+                translations: [
+                    {
+                        languageCode: LanguageCode.de,
+                        name: 'de Concurrent Potato',
+                        slug: 'de-concurrent-potato',
+                        description: 'Ein Erdapfel',
+                    },
+                ],
+            };
+
+            await Promise.all([
+                adminClient.query(updateProductDocument, { input }),
+                adminClient.query(updateProductDocument, { input }),
+            ]);
+
+            const { product } = await adminClient.query(getProductWithVariantsDocument, {
+                id: createProduct.id,
+            });
+            productGuard.assertSuccess(product);
+            const deTranslations = product.translations.filter(t => t.languageCode === LanguageCode.de);
+            expect(deTranslations.length).toBe(1);
+        });
+
         it('addOptionGroupToProduct adds an option group', async () => {
             const optionGroup = await createOptionGroup('Quark-type', ['Charm', 'Strange']);
             const result = await adminClient.query(addOptionGroupToProductDocument, {

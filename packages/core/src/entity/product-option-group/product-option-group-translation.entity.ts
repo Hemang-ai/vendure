@@ -1,6 +1,6 @@
 import { LanguageCode } from '@vendure/common/lib/generated-types';
 import { DeepPartial } from '@vendure/common/lib/shared-types';
-import { Column, Entity, Index, ManyToOne } from 'typeorm';
+import { Column, Entity, Index, ManyToOne, Unique } from 'typeorm';
 
 import { Translation } from '../../common/types/locale-types';
 import { HasCustomFields } from '../../config/custom-field/custom-field-types';
@@ -10,6 +10,7 @@ import { CustomProductOptionGroupFieldsTranslation } from '../custom-entity-fiel
 import { ProductOptionGroup } from './product-option-group.entity';
 
 @Entity()
+@Unique(['languageCode', 'base'])
 export class ProductOptionGroupTranslation
     extends VendureEntity
     implements Translation<ProductOptionGroup>, HasCustomFields
