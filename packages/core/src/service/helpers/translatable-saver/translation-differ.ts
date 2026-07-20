@@ -69,9 +69,16 @@ export class TranslationDiffer<Entity extends Translatable & { id: ID }> {
                 (translation as any).baseId = entity.id;
                 let newTranslation: any;
                 try {
-                    newTranslation = await this.connection
-                        .getRepository(ctx, this.translationCtor)
-                        .save(translation as any);
+                    // Run the insert in a savepoint (nested transaction). On Postgres, a unique
+                    // constraint violation aborts the entire enclosing transaction, which would
+                    // otherwise make the fallback queries below fail with "current transaction is
+                    // aborted" instead of recovering. Rolling back just the savepoint keeps the
+                    // outer transaction (shared with the rest of this request) healthy.
+                    newTranslation = await this.connection.withTransaction(ctx, transactionCtx =>
+                        this.connection
+                            .getRepository(transactionCtx, this.translationCtor)
+                            .save(translation as any),
+                    );
                 } catch (err: any) {
                     if (!isUniqueConstraintViolationError(err)) {
                         throw new InternalServerError(err.message);
