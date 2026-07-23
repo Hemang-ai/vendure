@@ -6,7 +6,7 @@ import {
     StockMovementListOptions,
 } from '@vendure/common/lib/generated-types';
 import { ID, PaginatedList } from '@vendure/common/lib/shared-types';
-import { In, LockNotSupportedOnGivenDriverError } from 'typeorm';
+import { In } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { Instrument } from '../../common/instrument-decorator';
@@ -18,7 +18,6 @@ import { OrderLine } from '../../entity/order-line/order-line.entity';
 import { Order } from '../../entity/order/order.entity';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { ShippingMethod } from '../../entity/shipping-method/shipping-method.entity';
-import { StockLevel } from '../../entity/stock-level/stock-level.entity';
 import { Allocation } from '../../entity/stock-movement/allocation.entity';
 import { Cancellation } from '../../entity/stock-movement/cancellation.entity';
 import { Release } from '../../entity/stock-movement/release.entity';
@@ -156,89 +155,98 @@ export class StockMovementService {
         ctx: RequestContext,
         lines: OrderLineInput[],
     ): Promise<Allocation[]> {
-        const allocations: Allocation[] = [];
-        const shortfalls: StockShortfall[] = [];
-        const globalTrackInventory = (await this.globalSettingsService.getSettings(ctx)).trackInventory;
-        let orderForEvent: Order | undefined;
-        for (const { orderLineId, quantity } of lines) {
-            // Load 'order' relation only for the first line — all lines share the same order.
-            const relations = orderForEvent ? [] : ['order'];
-            const orderLine = await this.connection.getEntityOrThrow(ctx, OrderLine, orderLineId, {
-                relations,
-            });
-            if (!orderForEvent) {
-                orderForEvent = orderLine.order;
-            }
-            const productVariant = await this.connection.getEntityOrThrow(
-                ctx,
-                ProductVariant,
-                orderLine.productVariantId,
-                { includeSoftDeleted: true },
-            );
-            // Acquire a pessimistic write lock on this variant's StockLevel rows before
-            // the strategy reads them. This serializes concurrent allocations for the same
-            // variant so the strategy's availability read is fresh (in MySQL REPEATABLE READ
-            // the locking read acts as the re-check). The entire method runs inside the
-            // order-state transition's withTransaction, so the lock is held until commit.
-            try {
-                await this.connection
-                    .getRepository(ctx, StockLevel)
-                    .createQueryBuilder('stockLevel')
-                    .setLock('pessimistic_write')
-                    .where('stockLevel.productVariantId = :productVariantId', {
-                        productVariantId: orderLine.productVariantId,
-                    })
-                    .getMany();
-            } catch (e) {
-                if (!(e instanceof LockNotSupportedOnGivenDriverError)) {
-                    throw e;
-                }
-                // SQLite does not support pessimistic locking. SQLite is single-writer in practice,
-                // so a concurrent write surfaces as SQLITE_BUSY rather than a silent lost update.
-                // This is not the same row-lock guarantee as Postgres/MySQL; SQLite is not
-                // recommended for concurrent production use.
-            }
-            const allocationLocations = await this.stockLocationService.getAllocationLocations(
-                ctx,
-                orderLine,
-                quantity,
-            );
-            const allocatedForLine = allocationLocations.reduce((sum, l) => sum + l.quantity, 0);
-            if (allocatedForLine < quantity) {
-                shortfalls.push({
-                    productVariantId: orderLine.productVariantId,
-                    orderLineId: orderLine.id,
-                    requested: quantity,
-                    allocated: allocatedForLine,
-                });
-            }
-            for (const allocationLocation of allocationLocations) {
-                const allocation = new Allocation({
-                    productVariant: new ProductVariant({ id: orderLine.productVariantId }),
-                    stockLocation: allocationLocation.location,
-                    quantity: allocationLocation.quantity,
-                    orderLine,
-                });
-                allocations.push(allocation);
+        // Run inside a transaction so that the per-variant pessimistic locks taken during
+        // allocation (see MultiChannelStockLocationStrategy.forAllocation) are valid and held until
+        // commit. Without this, a caller from a non-transactional context (a job-queue processor or
+        // a stand-alone script calling e.g. `orderService.transitionToState`) would trigger
+        // TypeORM's `PessimisticLockTransactionRequiredError` on every driver. Nested transactions
+        // join the existing one, so the core API paths (already `@Transaction`-wrapped) are unaffected.
+        return this.connection.withTransaction(ctx, async txCtx => {
+            const allocations: Allocation[] = [];
+            // A single batch can contain lines from more than one Order: `Fulfillment.orders` is a
+            // many-to-many relation and `default-fulfillment-process` re-allocates a cancelled
+            // fulfillment's lines in one call. Shortfalls are therefore grouped by the Order the
+            // shortfalling line belongs to, so each StockShortfallEvent references the right Order.
+            const shortfallsByOrder = new Map<ID, { order: Order; shortfalls: StockShortfall[] }>();
+            const globalTrackInventory = (await this.globalSettingsService.getSettings(txCtx))
+                .trackInventory;
 
-                if (this.trackInventoryForVariant(productVariant, globalTrackInventory)) {
-                    await this.stockLevelService.updateStockAllocatedForLocation(
-                        ctx,
-                        orderLine.productVariantId,
-                        allocationLocation.location.id,
-                        allocationLocation.quantity,
-                    );
+            // Load the order lines up front and process them in a deterministic order (by
+            // productVariantId), so concurrent allocation batches acquire the per-variant stock
+            // locks in the same global order and cannot deadlock when two Orders reference the same
+            // variants in a different sequence.
+            const orderLinesToAllocate = await Promise.all(
+                lines.map(async ({ orderLineId, quantity }) => ({
+                    orderLine: await this.connection.getEntityOrThrow(txCtx, OrderLine, orderLineId, {
+                        relations: ['order'],
+                    }),
+                    quantity,
+                })),
+            );
+            orderLinesToAllocate.sort((a, b) =>
+                `${a.orderLine.productVariantId}`.localeCompare(`${b.orderLine.productVariantId}`, undefined, {
+                    numeric: true,
+                }),
+            );
+
+            for (const { orderLine, quantity } of orderLinesToAllocate) {
+                const productVariant = await this.connection.getEntityOrThrow(
+                    txCtx,
+                    ProductVariant,
+                    orderLine.productVariantId,
+                    { includeSoftDeleted: true },
+                );
+                const allocationLocations = await this.stockLocationService.getAllocationLocations(
+                    txCtx,
+                    orderLine,
+                    quantity,
+                );
+                const allocatedForLine = allocationLocations.reduce((sum, l) => sum + l.quantity, 0);
+                if (allocatedForLine < quantity) {
+                    const shortfall: StockShortfall = {
+                        productVariantId: orderLine.productVariantId,
+                        orderLineId: orderLine.id,
+                        requested: quantity,
+                        allocated: allocatedForLine,
+                    };
+                    const group = shortfallsByOrder.get(orderLine.order.id);
+                    if (group) {
+                        group.shortfalls.push(shortfall);
+                    } else {
+                        shortfallsByOrder.set(orderLine.order.id, {
+                            order: orderLine.order,
+                            shortfalls: [shortfall],
+                        });
+                    }
+                }
+                for (const allocationLocation of allocationLocations) {
+                    const allocation = new Allocation({
+                        productVariant: new ProductVariant({ id: orderLine.productVariantId }),
+                        stockLocation: allocationLocation.location,
+                        quantity: allocationLocation.quantity,
+                        orderLine,
+                    });
+                    allocations.push(allocation);
+
+                    if (this.trackInventoryForVariant(productVariant, globalTrackInventory)) {
+                        await this.stockLevelService.updateStockAllocatedForLocation(
+                            txCtx,
+                            orderLine.productVariantId,
+                            allocationLocation.location.id,
+                            allocationLocation.quantity,
+                        );
+                    }
                 }
             }
-        }
-        const savedAllocations = await this.connection.getRepository(ctx, Allocation).save(allocations);
-        if (savedAllocations.length) {
-            await this.eventBus.publish(new StockMovementEvent(ctx, savedAllocations));
-        }
-        if (shortfalls.length && orderForEvent) {
-            await this.eventBus.publish(new StockShortfallEvent(ctx, orderForEvent, shortfalls));
-        }
-        return savedAllocations;
+            const savedAllocations = await this.connection.getRepository(txCtx, Allocation).save(allocations);
+            if (savedAllocations.length) {
+                await this.eventBus.publish(new StockMovementEvent(txCtx, savedAllocations));
+            }
+            for (const { order, shortfalls } of shortfallsByOrder.values()) {
+                await this.eventBus.publish(new StockShortfallEvent(txCtx, order, shortfalls));
+            }
+            return savedAllocations;
+        });
     }
 
     /**
