@@ -57,6 +57,7 @@ import {
     getActiveOrderDocument,
     getEligibleShippingMethodsDocument,
     getProductWithStockLevelDocument,
+    removeAllOrderLinesDocument,
     setShippingAddressDocument,
     setShippingMethodDocument,
     testOrderFragment,
@@ -1627,6 +1628,11 @@ describe('Stock control', () => {
                         `http://localhost:${testEnvConfig.apiOptions.port}/${testEnvConfig.apiOptions.shopApiPath}`,
                     );
                     await client.asUserWithCredentials(emailAddress, 'test');
+                    // These customers are reused across the suite, so an earlier test may have
+                    // left this customer with an active order still in AddingItems that holds
+                    // lines for other (now-depleted) variants. Transitioning to ArrangingPayment
+                    // validates every line, so start from a clean order to keep this test hermetic.
+                    await client.query(removeAllOrderLinesDocument);
                     const { addItemToOrder } = await client.query(addItemToOrderDocument, {
                         productVariantId: variantId,
                         quantity: quantityPerOrder,
