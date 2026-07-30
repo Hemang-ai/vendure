@@ -5,6 +5,7 @@ import {
     Logger,
     mergeConfig,
     OrderService,
+    Product,
     ProductService,
     RequestContextService,
     TransactionalConnection,
@@ -188,6 +189,11 @@ const customConfig = mergeConfig(testConfig(), {
                 type: 'string',
                 unique: true,
             },
+            {
+                name: 'indexedString',
+                type: 'string',
+                index: true,
+            },
         ],
         Facet: [
             {
@@ -266,6 +272,19 @@ describe('Custom fields', () => {
         await server.destroy();
     });
 
+    // #3444 — indexed custom fields should be represented in database metadata
+    it('creates a database index for an indexed custom field', () => {
+        const connection = server.app.get(TransactionalConnection).rawConnection;
+        const productMetadata = connection.getMetadata(Product);
+        const indexedCustomField = productMetadata.indices.find(index =>
+            index.columns.some(column => column.propertyPath === 'customFields.indexedString'),
+        );
+
+        expect(indexedCustomField?.columns.map(column => column.propertyPath)).toEqual([
+            'customFields.indexedString',
+        ]);
+    });
+
     it('globalSettings.serverConfig.customFieldConfig', async () => {
         const { globalSettings } = await adminClient.query(getServerConfigCustomFieldsDocument);
 
@@ -325,6 +344,7 @@ describe('Custom fields', () => {
                 { name: 'stringListWithDefault', type: 'string', list: true },
                 { name: 'intListWithValidation', type: 'int', list: true },
                 { name: 'uniqueString', type: 'string', list: false },
+                { name: 'indexedString', type: 'string', list: false },
             ],
         });
     });
@@ -387,6 +407,7 @@ describe('Custom fields', () => {
                 { name: 'stringListWithDefault', type: 'string', list: true },
                 { name: 'intListWithValidation', type: 'int', list: true },
                 { name: 'uniqueString', type: 'string', list: false },
+                { name: 'indexedString', type: 'string', list: false },
                 // The internal type should not be exposed at all
                 // { name: 'internalString', type: 'string' },
                 // The dashboard: false type should not be exposed in entityCustomFields

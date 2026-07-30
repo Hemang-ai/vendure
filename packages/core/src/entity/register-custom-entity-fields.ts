@@ -98,6 +98,7 @@ function registerCustomFieldsForEntity(
     if (customFields) {
         for (const customField of customFields) {
             const { name, list, defaultValue, nullable } = customField;
+            const indexed = 'index' in customField && customField.index === true;
             const instance = new ctor();
             const registerColumn = () => {
                 if (customField.type === 'relation') {
@@ -114,6 +115,9 @@ function registerCustomFieldsForEntity(
                         // Expose the foreign key as an id property (e.g. "ownerId"), which maps
                         // to the same database column as the relation's join column.
                         EntityId({ nullable: true })(instance, `${name}Id`);
+                        if (indexed) {
+                            Index()(instance, name);
+                        }
                     }
                 } else {
                     const options: ColumnOptions = {
@@ -162,6 +166,8 @@ function registerCustomFieldsForEntity(
                         // constraint if an index is defined on the column. For postgres/sqlite it is
                         // sufficient to add the `unique: true` property to the column options.
                         Index({ unique: true })(instance, name);
+                    } else if (indexed && customField.unique !== true) {
+                        Index()(instance, name);
                     }
                 }
             };

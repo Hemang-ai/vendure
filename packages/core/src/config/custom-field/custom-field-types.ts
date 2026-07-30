@@ -103,6 +103,17 @@ export type TypedCustomSingleFieldConfig<
     C extends CustomField,
 > = BaseTypedCustomFieldConfig<T, C> & {
     list?: false;
+    /**
+     * @description
+     * Creates a database index for this custom field. Use this for custom fields
+     * which are frequently used to filter or sort large data sets.
+     *
+     * Struct fields cannot be indexed because their database representation is
+     * not portable across the supported database engines.
+     *
+     * @since 3.8.0
+     */
+    index?: T extends 'struct' ? never : boolean;
     defaultValue?: DefaultValueType<T>;
     validate?: (
         value: DefaultValueType<T>,
