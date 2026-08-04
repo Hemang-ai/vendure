@@ -19,6 +19,7 @@ import { TableOptions } from '@tanstack/table-core';
 import { BulkActionsInput } from '@/vdb/framework/extension-api/types/index.js';
 import {
     FullWidthPageBlock,
+    InlineDropdownItem,
     Page,
     PageActionBar,
     PageLayout,
@@ -160,6 +161,14 @@ export interface ListPageProps<
     onSearchTermChange?: (searchTerm: string) => NonNullable<V['options']>['filter'];
     /**
      * @description
+     * Placeholder text for the search input. Should say what the search targets,
+     * e.g. "Search products...". Defaults to a generic "Search...".
+     *
+     * @since 3.8.0
+     */
+    searchPlaceholder?: string;
+    /**
+     * @description
      * Allows you to customize the rendering and other aspects of individual columns.
      *
      * By default, an appropriate component will be chosen to render the column data
@@ -289,6 +298,12 @@ export interface ListPageProps<
     children?: React.ReactNode;
     /**
      * @description
+     * Optional dropdown menu items to display in the action bar's overflow (⋮) menu.
+     * These are forwarded to the {@link PageActionBar}.
+     */
+    dropdownMenuItems?: InlineDropdownItem[];
+    /**
+     * @description
      * Allows you to define pre-set filters based on an array of possible selections
      *
      * @example
@@ -385,6 +400,13 @@ export interface ListPageProps<
      * Defaults to false. Only relevant when `onReorder` is provided.
      */
     disableDragAndDrop?: boolean;
+    /**
+     * @description
+     * An optional action rendered inside the first-run empty state (when the list
+     * has no items and no active filters), typically a "create your first X" CTA.
+     * Gate it with a {@link PermissionGuard} to mirror the create button's permissions.
+     */
+    emptyStateAction?: React.ReactNode;
 }
 
 /**
@@ -496,8 +518,10 @@ export function ListPage<
     route: routeOrFn,
     defaultVisibility,
     onSearchTermChange,
+    searchPlaceholder,
     facetedFilters,
     children,
+    dropdownMenuItems,
     rowActions,
     transformData,
     setTableOptions,
@@ -505,6 +529,7 @@ export function ListPage<
     registerRefresher,
     onReorder,
     disableDragAndDrop = false,
+    emptyStateAction,
 }: Readonly<ListPageProps<T, U, V, AC>>) {
     const route = typeof routeOrFn === 'function' ? routeOrFn() : routeOrFn;
     const routeSearch = route.useSearch();
@@ -570,6 +595,7 @@ export function ListPage<
         defaultColumnOrder: defaultColumnOrder as any,
         defaultVisibility: defaultVisibility as any,
         onSearchTermChange,
+        searchPlaceholder,
         page: pagination.page,
         itemsPerPage: pagination.itemsPerPage,
         sorting,
@@ -600,16 +626,18 @@ export function ListPage<
         setTableOptions,
         transformData,
         registerRefresher,
+        emptyStateAction,
     };
 
     return (
         <Page pageId={pageId}>
             <PageTitle>{title}</PageTitle>
-            <PageActionBar>{children}</PageActionBar>
+            <PageActionBar dropdownMenuItems={dropdownMenuItems}>{children}</PageActionBar>
             <PageLayout>
                 <FullWidthPageBlock blockId="list-table">
                     <PaginatedListDataTable
                         {...commonTableProps}
+                        enableViews
                         onReorder={onReorder}
                         disableDragAndDrop={disableDragAndDrop}
                     />
