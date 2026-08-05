@@ -27,8 +27,8 @@ msgid "Select items"
 msgstr "Изберете елементи"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
-msgid "Uploading assets..."
-msgstr ""
+#~ msgid "Uploading assets..."
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
@@ -3065,6 +3065,10 @@ msgstr "Преизчисляване на доставката"
 msgid "Assets"
 msgstr "Медия"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This will remove all option groups from this product and return to the variant setup choice."
 msgstr "Това ще премахне всички групи опции от този продукт и ще се върне към избора за настройка на варианти."
@@ -5153,6 +5157,11 @@ msgstr ""
 msgid "Failed to create variants"
 msgstr "Неуспешно създаване на варианти"
 
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Upload progress for {0} files"
+msgstr ""
+
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Sets the stock level at which this a variant is considered to be out of stock. Using a negative value enables backorder support. Can be overridden by product variants."
 msgstr "Задава нивото на наличност, при което този вариант се счита за изчерпан. Използването на отрицателна стойност позволява поддръжка на резервни поръчки. Може да се замени от варианти на продукта."
@@ -5721,6 +5730,10 @@ msgstr "({maxRefundable} възстановими)"
 msgid "Identifier"
 msgstr "Идентификатор"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading assets"
+msgstr ""
+
 #: src/app/routes/_authenticated/_shipping-methods/components/fulfillment-handler-selector.tsx
 msgid "Select a fulfillment handler"
 msgstr "Избери обработчик на изпълнение"
@@ -6205,6 +6218,11 @@ msgstr "Методът на доставка е създаден успешно"
 #: src/app/routes/_authenticated/_customer-groups/customer-groups.tsx
 msgid "New Customer Group"
 msgstr "Нова клиентска група"
+
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "{doneCount} of {0} done"
+msgstr ""
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Visible to customer"
@@ -7044,6 +7062,7 @@ msgid "Underline"
 msgstr "Подчертан"
 
 #: src/app/routes/_authenticated/_api-keys/components/api-key-secret-dialog.tsx
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
 msgid "Close"
 msgstr "Затваряне"
 

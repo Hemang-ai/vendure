@@ -27,8 +27,8 @@ msgid "Select items"
 msgstr "Odaberi stavke"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
-msgid "Uploading assets..."
-msgstr ""
+#~ msgid "Uploading assets..."
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
@@ -3048,6 +3048,10 @@ msgstr "Preračunaj dostavu"
 msgid "Assets"
 msgstr "Datoteke"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This will remove all option groups from this product and return to the variant setup choice."
 msgstr "Ovo će ukloniti sve grupe opcija s ovog proizvoda i vratiti se na izbor postavljanja varijanti."
@@ -5130,6 +5134,11 @@ msgstr ""
 msgid "Failed to create variants"
 msgstr "Stvaranje varijanti nije uspjelo"
 
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Upload progress for {0} files"
+msgstr ""
+
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Sets the stock level at which this a variant is considered to be out of stock. Using a negative value enables backorder support. Can be overridden by product variants."
 msgstr "Postavlja razinu zaliha pri kojoj se ova varijanta smatra rasprodanom. Korištenje negativne vrijednosti omogućuje podršku za prednarudžbe. Može se nadjačati varijantama proizvoda."
@@ -5692,6 +5701,10 @@ msgstr "({maxRefundable} povratno)"
 msgid "Identifier"
 msgstr "Identifikator"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading assets"
+msgstr ""
+
 #: src/app/routes/_authenticated/_shipping-methods/components/fulfillment-handler-selector.tsx
 msgid "Select a fulfillment handler"
 msgstr "Odaberite obrađivač isporuke"
@@ -6173,6 +6186,11 @@ msgstr "Način dostave uspješno stvoren"
 #: src/app/routes/_authenticated/_customer-groups/customer-groups.tsx
 msgid "New Customer Group"
 msgstr "Nova grupa kupaca"
+
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "{doneCount} of {0} done"
+msgstr ""
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Visible to customer"
@@ -7007,6 +7025,7 @@ msgid "Underline"
 msgstr "Podcrtano"
 
 #: src/app/routes/_authenticated/_api-keys/components/api-key-secret-dialog.tsx
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
 msgid "Close"
 msgstr "Zatvori"
 

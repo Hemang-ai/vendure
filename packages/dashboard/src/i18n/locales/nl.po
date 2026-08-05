@@ -27,8 +27,8 @@ msgid "Select items"
 msgstr "Selecteer items"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
-msgid "Uploading assets..."
-msgstr ""
+#~ msgid "Uploading assets..."
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
@@ -3042,6 +3042,10 @@ msgstr "Verzendkosten herberekenen"
 msgid "Assets"
 msgstr "Middelen"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This will remove all option groups from this product and return to the variant setup choice."
 msgstr "Dit verwijdert alle optiegroepen van dit product en keert terug naar de variantkeuze."
@@ -5121,6 +5125,11 @@ msgstr ""
 msgid "Failed to create variants"
 msgstr "Aanmaken van varianten mislukt"
 
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Upload progress for {0} files"
+msgstr ""
+
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Sets the stock level at which this a variant is considered to be out of stock. Using a negative value enables backorder support. Can be overridden by product variants."
 msgstr "Stelt het voorraadniveau in waarbij deze variant als uitverkocht wordt beschouwd. Het gebruik van een negatieve waarde schakelt ondersteuning voor nabestellingen in. Kan worden overschreven door productvarianten."
@@ -5687,6 +5696,10 @@ msgstr "({maxRefundable} restitueerbaar)"
 msgid "Identifier"
 msgstr "Identificatie"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading assets"
+msgstr ""
+
 #: src/app/routes/_authenticated/_shipping-methods/components/fulfillment-handler-selector.tsx
 msgid "Select a fulfillment handler"
 msgstr "Selecteer een fulfilmenthandler"
@@ -6168,6 +6181,11 @@ msgstr "Verzendmethode succesvol aangemaakt"
 #: src/app/routes/_authenticated/_customer-groups/customer-groups.tsx
 msgid "New Customer Group"
 msgstr "Nieuwe klantengroep"
+
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "{doneCount} of {0} done"
+msgstr ""
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Visible to customer"
@@ -7002,6 +7020,7 @@ msgid "Underline"
 msgstr "Onderstrepen"
 
 #: src/app/routes/_authenticated/_api-keys/components/api-key-secret-dialog.tsx
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
 msgid "Close"
 msgstr "Sluiten"
 

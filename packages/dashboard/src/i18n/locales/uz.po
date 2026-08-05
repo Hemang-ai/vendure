@@ -27,8 +27,8 @@ msgid "Select items"
 msgstr "Elementlarni tanlang"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
-msgid "Uploading assets..."
-msgstr ""
+#~ msgid "Uploading assets..."
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
@@ -2969,6 +2969,10 @@ msgstr "Yetkazib berishni qayta hisoblash"
 msgid "Assets"
 msgstr "Assetlar"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This will remove all option groups from this product and return to the variant setup choice."
 msgstr "Bu mahsulotdagi barcha optsiya guruhlarini olib tashlaydi va variant sozlash tanloviga qaytaradi."
@@ -4994,6 +4998,11 @@ msgstr ""
 msgid "Failed to create variants"
 msgstr "Variantlarni yaratib bo'lmadi"
 
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Upload progress for {0} files"
+msgstr ""
+
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Sets the stock level at which this a variant is considered to be out of stock. Using a negative value enables backorder support. Can be overridden by product variants."
 msgstr "Variant zaxirasi tugagan deb hisoblanadigan darajani belgilaydi. Manfiy qiymat oldindan buyurtma imkonini yoqadi. Mahsulot variantlari buni bekor qilishi mumkin."
@@ -5540,6 +5549,10 @@ msgstr "({maxRefundable} qaytarilishi mumkin)"
 msgid "Identifier"
 msgstr "Identifikator"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading assets"
+msgstr ""
+
 #: src/app/routes/_authenticated/_shipping-methods/components/fulfillment-handler-selector.tsx
 msgid "Select a fulfillment handler"
 msgstr "Buyurtmani bajarish ishlovchisini tanlang"
@@ -5989,6 +6002,11 @@ msgstr "Yetkazib berish usuli muvaffaqiyatli yaratildi"
 #: src/app/routes/_authenticated/_customer-groups/customer-groups.tsx
 msgid "New Customer Group"
 msgstr "Yangi mijozlar guruhi"
+
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "{doneCount} of {0} done"
+msgstr ""
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Visible to customer"
@@ -6803,6 +6821,7 @@ msgid "Underline"
 msgstr "Tagiga chizilgan"
 
 #: src/app/routes/_authenticated/_api-keys/components/api-key-secret-dialog.tsx
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
 msgid "Close"
 msgstr "Yopish"
 

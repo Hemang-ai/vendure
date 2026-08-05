@@ -27,8 +27,8 @@ msgid "Select items"
 msgstr "Seleccionar elementos"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
-msgid "Uploading assets..."
-msgstr ""
+#~ msgid "Uploading assets..."
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
@@ -3048,6 +3048,10 @@ msgstr "Recalcular envío"
 msgid "Assets"
 msgstr "Recursos"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This will remove all option groups from this product and return to the variant setup choice."
 msgstr "Esto eliminará todos los grupos de opciones de este producto y volverá a la selección de configuración de variantes."
@@ -5130,6 +5134,11 @@ msgstr ""
 msgid "Failed to create variants"
 msgstr "Error al crear las variantes"
 
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Upload progress for {0} files"
+msgstr ""
+
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Sets the stock level at which this a variant is considered to be out of stock. Using a negative value enables backorder support. Can be overridden by product variants."
 msgstr "Establece el nivel de stock en el que esta variante se considera agotada. El uso de un valor negativo habilita el soporte de pedidos pendientes. Puede ser anulado por las variantes de producto."
@@ -5692,6 +5701,10 @@ msgstr "({maxRefundable} reembolsable)"
 msgid "Identifier"
 msgstr "Identificador"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading assets"
+msgstr ""
+
 #: src/app/routes/_authenticated/_shipping-methods/components/fulfillment-handler-selector.tsx
 msgid "Select a fulfillment handler"
 msgstr "Seleccionar un controlador de cumplimiento"
@@ -6173,6 +6186,11 @@ msgstr "Método de envío creado correctamente"
 #: src/app/routes/_authenticated/_customer-groups/customer-groups.tsx
 msgid "New Customer Group"
 msgstr "Nuevo Grupo de Clientes"
+
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "{doneCount} of {0} done"
+msgstr ""
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Visible to customer"
@@ -7007,6 +7025,7 @@ msgid "Underline"
 msgstr "Subrayado"
 
 #: src/app/routes/_authenticated/_api-keys/components/api-key-secret-dialog.tsx
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
 msgid "Close"
 msgstr "Cerrar"
 

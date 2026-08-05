@@ -27,8 +27,8 @@ msgid "Select items"
 msgstr "वस्तुहरू चयन गर्नुहोस्"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
-msgid "Uploading assets..."
-msgstr ""
+#~ msgid "Uploading assets..."
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
@@ -3048,6 +3048,10 @@ msgstr "ढुवानी पुन: गणना गर्नुहोस्"
 msgid "Assets"
 msgstr "सम्पत्तिहरू"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This will remove all option groups from this product and return to the variant setup choice."
 msgstr "यसले यो उत्पादनबाट सबै विकल्प समूहहरू हटाउनेछ र भेरियन्ट सेटअप छनोटमा फर्काउनेछ।"
@@ -5130,6 +5134,11 @@ msgstr ""
 msgid "Failed to create variants"
 msgstr "भेरियन्टहरू सिर्जना गर्न असफल भयो"
 
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Upload progress for {0} files"
+msgstr ""
+
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Sets the stock level at which this a variant is considered to be out of stock. Using a negative value enables backorder support. Can be overridden by product variants."
 msgstr "यो भेरियन्ट स्टक बाहिर मानिने स्टक स्तर सेट गर्दछ। नकारात्मक मान प्रयोग गर्दा ब्याकअर्डर समर्थन सक्षम हुन्छ। उत्पादन भेरियन्टहरूद्वारा ओभरराइड गर्न सकिन्छ।"
@@ -5692,6 +5701,10 @@ msgstr "({maxRefundable} फिर्ता गर्न मिल्ने)"
 msgid "Identifier"
 msgstr "पहिचानकर्ता"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading assets"
+msgstr ""
+
 #: src/app/routes/_authenticated/_shipping-methods/components/fulfillment-handler-selector.tsx
 msgid "Select a fulfillment handler"
 msgstr "फुलफिलमेन्ट ह्यान्डलर चयन गर्नुहोस्"
@@ -6173,6 +6186,11 @@ msgstr "ढुवानी विधि सफलतापूर्वक सि
 #: src/app/routes/_authenticated/_customer-groups/customer-groups.tsx
 msgid "New Customer Group"
 msgstr "नयाँ ग्राहक समूह"
+
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "{doneCount} of {0} done"
+msgstr ""
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Visible to customer"
@@ -7007,6 +7025,7 @@ msgid "Underline"
 msgstr "अन्डरलाइन"
 
 #: src/app/routes/_authenticated/_api-keys/components/api-key-secret-dialog.tsx
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
 msgid "Close"
 msgstr "बन्द गर्नुहोस्"
 

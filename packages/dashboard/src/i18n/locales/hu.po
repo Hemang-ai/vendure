@@ -27,8 +27,8 @@ msgid "Select items"
 msgstr "Válasszon elemeket"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
-msgid "Uploading assets..."
-msgstr ""
+#~ msgid "Uploading assets..."
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
@@ -3038,6 +3038,10 @@ msgstr "Szállítási díj újraszámítása"
 msgid "Assets"
 msgstr "Média"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This will remove all option groups from this product and return to the variant setup choice."
 msgstr "Ez eltávolítja az összes opciócsoportot ebből a termékből és visszatér a variáns beállítási lehetőséghez."
@@ -5117,6 +5121,11 @@ msgstr ""
 msgid "Failed to create variants"
 msgstr "Nem sikerült létrehozni a variánsokat"
 
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Upload progress for {0} files"
+msgstr ""
+
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Sets the stock level at which this a variant is considered to be out of stock. Using a negative value enables backorder support. Can be overridden by product variants."
 msgstr "Beállítja azt a készletszintet, amelynél ez a termékváltozat készleten kívülinek minősül. Negatív érték használata lehetővé teszi az utórendelés támogatását. Felülírható termékváltozatok által."
@@ -5679,6 +5688,10 @@ msgstr "({maxRefundable} visszatéríthető)"
 msgid "Identifier"
 msgstr "Azonosító"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading assets"
+msgstr ""
+
 #: src/app/routes/_authenticated/_shipping-methods/components/fulfillment-handler-selector.tsx
 msgid "Select a fulfillment handler"
 msgstr "Válasszon teljesítéskezelőt"
@@ -6160,6 +6173,11 @@ msgstr "A szállítási mód sikeresen létrehozva"
 #: src/app/routes/_authenticated/_customer-groups/customer-groups.tsx
 msgid "New Customer Group"
 msgstr "Új vásárlói csoport"
+
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "{doneCount} of {0} done"
+msgstr ""
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Visible to customer"
@@ -6990,6 +7008,7 @@ msgid "Underline"
 msgstr "Aláhúzott"
 
 #: src/app/routes/_authenticated/_api-keys/components/api-key-secret-dialog.tsx
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
 msgid "Close"
 msgstr "Bezárás"
 

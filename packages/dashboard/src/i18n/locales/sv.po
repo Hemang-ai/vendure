@@ -27,8 +27,8 @@ msgid "Select items"
 msgstr "Välj artiklar"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
-msgid "Uploading assets..."
-msgstr ""
+#~ msgid "Uploading assets..."
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
@@ -3048,6 +3048,10 @@ msgstr "Beräkna om frakt"
 msgid "Assets"
 msgstr "Tillgångar"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This will remove all option groups from this product and return to the variant setup choice."
 msgstr "Detta tar bort alla alternativgrupper från produkten och återgår till variantval."
@@ -5130,6 +5134,11 @@ msgstr ""
 msgid "Failed to create variants"
 msgstr "Misslyckades med att skapa varianter"
 
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Upload progress for {0} files"
+msgstr ""
+
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Sets the stock level at which this a variant is considered to be out of stock. Using a negative value enables backorder support. Can be overridden by product variants."
 msgstr "Anger lagernivån vid vilken denna variant anses vara slut i lager. Användning av negativt värde aktiverar restorderstöd. Kan åsidosättas av produktvarianter."
@@ -5692,6 +5701,10 @@ msgstr "({maxRefundable} återbetalningsbart)"
 msgid "Identifier"
 msgstr "Identifierare"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading assets"
+msgstr ""
+
 #: src/app/routes/_authenticated/_shipping-methods/components/fulfillment-handler-selector.tsx
 msgid "Select a fulfillment handler"
 msgstr "Välj en fulfillment-hanterare"
@@ -6173,6 +6186,11 @@ msgstr "Fraktmetod skapades"
 #: src/app/routes/_authenticated/_customer-groups/customer-groups.tsx
 msgid "New Customer Group"
 msgstr "Ny kundgrupp"
+
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "{doneCount} of {0} done"
+msgstr ""
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Visible to customer"
@@ -7007,6 +7025,7 @@ msgid "Underline"
 msgstr "Understruken"
 
 #: src/app/routes/_authenticated/_api-keys/components/api-key-secret-dialog.tsx
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
 msgid "Close"
 msgstr "Stäng"
 

@@ -27,8 +27,8 @@ msgid "Select items"
 msgstr "Sélectionner des éléments"
 
 #: src/lib/components/shared/asset/asset-gallery.tsx
-msgid "Uploading assets..."
-msgstr ""
+#~ msgid "Uploading assets..."
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
@@ -3048,6 +3048,10 @@ msgstr "Recalculer les frais de livraison"
 msgid "Assets"
 msgstr "Ressources"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "This will remove all option groups from this product and return to the variant setup choice."
 msgstr "Cela supprimera tous les groupes d'options de ce produit et reviendra au choix de configuration des variantes."
@@ -5130,6 +5134,11 @@ msgstr ""
 msgid "Failed to create variants"
 msgstr "Échec de la création des variantes"
 
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Upload progress for {0} files"
+msgstr ""
+
 #: src/app/routes/_authenticated/_global-settings/global-settings.tsx
 msgid "Sets the stock level at which this a variant is considered to be out of stock. Using a negative value enables backorder support. Can be overridden by product variants."
 msgstr "Définit le niveau de stock à partir duquel cette variante est considérée comme en rupture de stock. L'utilisation d'une valeur négative active le support de commande en attente. Peut être remplacé par les variantes de produit."
@@ -5692,6 +5701,10 @@ msgstr "({maxRefundable} remboursable)"
 msgid "Identifier"
 msgstr "Identifiant"
 
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "Uploading assets"
+msgstr ""
+
 #: src/app/routes/_authenticated/_shipping-methods/components/fulfillment-handler-selector.tsx
 msgid "Select a fulfillment handler"
 msgstr "Sélectionner un gestionnaire de traitement"
@@ -6173,6 +6186,11 @@ msgstr "Mode de livraison créé avec succès"
 #: src/app/routes/_authenticated/_customer-groups/customer-groups.tsx
 msgid "New Customer Group"
 msgstr "Nouveau groupe de clients"
+
+#. placeholder {0}: fileUploads.length
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
+msgid "{doneCount} of {0} done"
+msgstr ""
 
 #: src/lib/components/shared/history-timeline/history-note-checkbox.tsx
 msgid "Visible to customer"
@@ -7007,6 +7025,7 @@ msgid "Underline"
 msgstr "Souligné"
 
 #: src/app/routes/_authenticated/_api-keys/components/api-key-secret-dialog.tsx
+#: src/lib/components/shared/asset/asset-upload-modal.tsx
 msgid "Close"
 msgstr "Fermer"
 
