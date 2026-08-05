@@ -398,7 +398,7 @@
           "title": "Translations",
           "slug": "translations",
           "file": "docs/guides/developer-guide/translations/index.mdx",
-          "lastModified": "2026-02-12T16:47:03+01:00"
+          "lastModified": "2026-08-04T12:09:32+02:00"
         },
         {
           "title": "Uploading Files",
@@ -1216,7 +1216,7 @@
                   "title": "I18nService",
                   "slug": "i18n-service",
                   "file": "docs/reference/typescript-api/common/i18n-service.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T11:59:25Z"
                 },
                 {
                   "title": "ID",
@@ -1328,7 +1328,7 @@
                   "title": "ConfigArgs",
                   "slug": "config-args",
                   "file": "docs/reference/typescript-api/configurable-operation-def/config-args.mdx",
-                  "lastModified": "2026-07-31T11:54:35+02:00"
+                  "lastModified": "2026-08-04T10:12:26Z"
                 },
                 {
                   "title": "ConfigArgType",
@@ -1340,7 +1340,25 @@
                   "title": "ConfigurableOperationDefOptions",
                   "slug": "configurable-operation-def-options",
                   "file": "docs/reference/typescript-api/configurable-operation-def/configurable-operation-def-options.mdx",
-                  "lastModified": "2026-07-31T11:54:35+02:00"
+                  "lastModified": "2026-08-04T10:12:26Z"
+                },
+                {
+                  "title": "ConfigurableOperationDefType",
+                  "slug": "configurable-operation-def-type",
+                  "file": "docs/reference/typescript-api/configurable-operation-def/configurable-operation-def-type.mdx",
+                  "lastModified": "2026-08-04T10:12:26Z"
+                },
+                {
+                  "title": "ConfigurableOperationTranslationKey",
+                  "slug": "configurable-operation-translation-key",
+                  "file": "docs/reference/typescript-api/configurable-operation-def/configurable-operation-translation-key.mdx",
+                  "lastModified": "2026-08-04T10:12:26Z"
+                },
+                {
+                  "title": "ConfigurableOperationTranslator",
+                  "slug": "configurable-operation-translator",
+                  "file": "docs/reference/typescript-api/configurable-operation-def/configurable-operation-translator.mdx",
+                  "lastModified": "2026-08-04T10:12:26Z"
                 },
                 {
                   "title": "DefaultFormComponentId",
@@ -1358,10 +1376,10 @@
                   "title": "LocalizedStringArray",
                   "slug": "localized-string-array",
                   "file": "docs/reference/typescript-api/configurable-operation-def/localized-string-array.mdx",
-                  "lastModified": "2026-07-31T11:54:35+02:00"
+                  "lastModified": "2026-08-04T10:12:26Z"
                 }
               ],
-              "lastModified": "2026-07-31T11:54:35+02:00"
+              "lastModified": "2026-08-04T10:12:26Z"
             },
             {
               "title": "Configuration",
@@ -1378,7 +1396,7 @@
                   "title": "CollectionFilter",
                   "slug": "collection-filter",
                   "file": "docs/reference/typescript-api/configuration/collection-filter.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "DefaultConfig",
@@ -1402,7 +1420,7 @@
                   "title": "EntityDuplicator",
                   "slug": "entity-duplicator",
                   "file": "docs/reference/typescript-api/configuration/entity-duplicator.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "EntityId Decorator",
@@ -2016,7 +2034,7 @@
                   "title": "FulfillmentHandler",
                   "slug": "fulfillment-handler",
                   "file": "docs/reference/typescript-api/fulfillment/fulfillment-handler.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "FulfillmentProcess",
@@ -2554,25 +2572,25 @@
                   "title": "Payment Method Types",
                   "slug": "payment-method-types",
                   "file": "docs/reference/typescript-api/payment/payment-method-types.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "PaymentMethodConfigOptions",
                   "slug": "payment-method-config-options",
                   "file": "docs/reference/typescript-api/payment/payment-method-config-options.mdx",
-                  "lastModified": "2026-01-28T14:49:21+01:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "PaymentMethodEligibilityChecker",
                   "slug": "payment-method-eligibility-checker",
                   "file": "docs/reference/typescript-api/payment/payment-method-eligibility-checker.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "PaymentMethodHandler",
                   "slug": "payment-method-handler",
                   "file": "docs/reference/typescript-api/payment/payment-method-handler.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "PaymentOptions",
@@ -2734,13 +2752,13 @@
                   "title": "Promotion Action",
                   "slug": "promotion-action",
                   "file": "docs/reference/typescript-api/promotions/promotion-action.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "Promotion Condition",
                   "slug": "promotion-condition",
                   "file": "docs/reference/typescript-api/promotions/promotion-condition.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "PromotionOptions",
@@ -3226,7 +3244,7 @@
                   "title": "CheckShippingEligibilityCheckerFn",
                   "slug": "check-shipping-eligibility-checker-fn",
                   "file": "docs/reference/typescript-api/shipping/check-shipping-eligibility-checker-fn.mdx",
-                  "lastModified": "2026-01-28T14:49:21+01:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "DefaultShippingLineAssignmentStrategy",
@@ -3238,19 +3256,19 @@
                   "title": "ShippingCalculator",
                   "slug": "shipping-calculator",
                   "file": "docs/reference/typescript-api/shipping/shipping-calculator.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "ShippingEligibilityChecker",
                   "slug": "shipping-eligibility-checker",
                   "file": "docs/reference/typescript-api/shipping/shipping-eligibility-checker.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "ShippingEligibilityCheckerConfig",
                   "slug": "shipping-eligibility-checker-config",
                   "file": "docs/reference/typescript-api/shipping/shipping-eligibility-checker-config.mdx",
-                  "lastModified": "2026-01-28T14:49:21+01:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 },
                 {
                   "title": "ShippingLineAssignmentStrategy",
@@ -3268,7 +3286,7 @@
                   "title": "ShouldRunCheckFn",
                   "slug": "should-run-check-fn",
                   "file": "docs/reference/typescript-api/shipping/should-run-check-fn.mdx",
-                  "lastModified": "2026-01-28T14:49:21+01:00"
+                  "lastModified": "2026-07-31T14:43:47Z"
                 }
               ],
               "lastModified": "2026-01-28T14:49:21+01:00"
