@@ -61,28 +61,6 @@ const getAssetListDocument = graphql(
     [assetFragment],
 );
 
-export const createAssetsDocument = graphql(
-    `
-        mutation CreateAssets($input: [CreateAssetInput!]!) {
-            createAssets(input: $input) {
-                ...Asset
-                ... on Asset {
-                    tags {
-                        id
-                        createdAt
-                        updatedAt
-                        value
-                    }
-                }
-                ... on ErrorResult {
-                    message
-                }
-            }
-        }
-    `,
-    [assetFragment],
-);
-
 // Mirrors the @vendure-io/ui data-table band swap: while assets are selected
 // the bulk bar takes the search bar's place. Fade out then in, 100ms per
 // phase; mode="wait" keeps the rows sequential so they never stack.
@@ -264,6 +242,19 @@ export function AssetGallery({
         void queryClient.invalidateQueries({ queryKey: ['AssetGallery'] });
         void queryClient.invalidateQueries({ queryKey: [PaginatedListDataTableKey] });
     }, [clearSelection, queryClient]);
+
+    // Invalidated by prefix (not the fully-parameterised queryKey above) so this
+    // stays correct even if page/search/sort changed while the upload was running.
+    // Skipped entirely when nothing succeeded, since there's nothing new to show.
+    const handleUploadComplete = useCallback(
+        (summary: { succeededCount: number; failedCount: number }) => {
+            if (summary.succeededCount > 0) {
+                void queryClient.invalidateQueries({ queryKey: ['AssetGallery'] });
+                void queryClient.invalidateQueries({ queryKey: [PaginatedListDataTableKey] });
+            }
+        },
+        [queryClient],
+    );
     const adaptedBulkActions = useMemo(
         () => adaptAssetBulkActions(bulkActions, refetchAssets),
         [bulkActions, refetchAssets],
@@ -798,7 +789,7 @@ export function AssetGallery({
         <AssetUploadModal
             files={pendingFiles}
             open={uploadModalOpen}
-            onComplete={() => queryClient.invalidateQueries({ queryKey })}
+            onComplete={handleUploadComplete}
             onClose={() => setUploadModalOpen(false)}
         />
         </>

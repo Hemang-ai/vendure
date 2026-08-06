@@ -8,27 +8,40 @@ import {
     DialogTitle,
 } from '@/vdb/components/ui/dialog.js';
 import { Progress } from '@/vdb/components/ui/progress.js';
-import { LS_KEY_SELECTED_CHANNEL_TOKEN, LS_KEY_SESSION_TOKEN, LS_KEY_USER_SETTINGS } from '@/vdb/constants.js';
-import { getApiBaseUrl } from '@/vdb/utils/config-utils.js';
-import { Trans } from '@lingui/react/macro';
-import { print } from 'graphql';
+import { api, UploadErrorCode, UploadWithProgressResult } from '@/vdb/graphql/api.js';
+import { ResultOf } from '@/vdb/graphql/graphql.js';
+import { Plural, Trans } from '@lingui/react/macro';
 import { CheckCircle2, Clock, Loader2, XCircle } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { uiConfig } from 'virtual:vendure-ui-config';
-import { createAssetsDocument } from './asset-gallery.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createAssetsDocument } from './asset-documents.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type UploadStatus = 'queued' | 'uploading' | 'done' | 'error';
 
+// A file can also be rejected by the server (e.g. wrong mime type) even
+// though the request itself succeeded, so this extends the transport-level
+// UploadErrorCode with that data-level outcome.
+export type UploadItemErrorCode = UploadErrorCode | 'REJECTED';
+
 interface FileUpload {
     file: File;
     status: UploadStatus;
     progress: number; // 0–100
-    error?: string;
+    errorCode?: UploadItemErrorCode;
+    errorDetail?: string;
 }
 
-type UploadResult = { success: true } | { success: false; error: string };
+export type UploadItemResult =
+    | { success: true }
+    | { success: false; code: UploadItemErrorCode; detail?: string };
+
+export interface UploadSummary {
+    succeededCount: number;
+    failedCount: number;
+}
+
+const MAX_CONCURRENT_UPLOADS = 4;
 
 // ─── Pure helpers ─────────────────────────────────────────────────────────────
 
@@ -36,93 +49,48 @@ function isTerminalStatus(upload: FileUpload): boolean {
     return upload.status === 'done' || upload.status === 'error';
 }
 
-function allUploadsFinished(uploads: FileUpload[]): boolean {
+export function allUploadsFinished(uploads: FileUpload[]): boolean {
     return uploads.length > 0 && uploads.every(isTerminalStatus);
 }
 
-function overallProgress(uploads: FileUpload[]): number {
+export function overallProgress(uploads: FileUpload[]): number {
     if (uploads.length === 0) return 0;
     const total = uploads.reduce((sum, upload) => sum + upload.progress, 0);
     return Math.round(total / uploads.length);
 }
 
-function withUpdatedUpload(
-    uploads: FileUpload[],
-    index: number,
-    patch: Partial<FileUpload>,
-): FileUpload[] {
+export function withUpdatedUpload(uploads: FileUpload[], index: number, patch: Partial<FileUpload>): FileUpload[] {
     return uploads.map((upload, i) => (i === index ? { ...upload, ...patch } : upload));
 }
 
-// ─── XHR upload ───────────────────────────────────────────────────────────────
-
-// XHR is used instead of fetch because fetch has no upload.onprogress event.
-// Each file is sent as its own request so we get 0-100% progress per file.
-
-function buildApiUrl(): string {
-    let url = `${getApiBaseUrl()}/${uiConfig.api.adminApiPath}`;
-    try {
-        const settings = JSON.parse(localStorage.getItem(LS_KEY_USER_SETTINGS) ?? '{}');
-        if (settings.contentLanguage) {
-            url += `?languageCode=${settings.contentLanguage}`;
-        }
-    } catch {}
-    return url;
-}
-
-function applyAuthHeaders(xhr: XMLHttpRequest): void {
-    const sessionToken = localStorage.getItem(LS_KEY_SESSION_TOKEN);
-    const channelToken = localStorage.getItem(LS_KEY_SELECTED_CHANNEL_TOKEN);
-    if (sessionToken) xhr.setRequestHeader('Authorization', `Bearer ${sessionToken}`);
-    if (channelToken) xhr.setRequestHeader(uiConfig.api.channelTokenKey, channelToken);
-}
-
-function buildMultipartBody(file: File): FormData {
-    const body = new FormData();
-    body.append(
-        'operations',
-        JSON.stringify({ query: print(createAssetsDocument), variables: { input: [{ file: null }] } }),
-    );
-    body.append('map', JSON.stringify({ '0': ['variables.input.0.file'] }));
-    body.append('0', file, file.name);
-    return body;
-}
-
-function parseGraphqlResponse(responseText: string): UploadResult {
-    try {
-        const json = JSON.parse(responseText);
-        const graphqlError = json?.errors?.[0]?.message;
-        if (graphqlError) return { success: false, error: graphqlError };
-    } catch {}
+export function interpretUploadResult(
+    result: UploadWithProgressResult<ResultOf<typeof createAssetsDocument>>,
+): UploadItemResult {
+    if (!result.success) {
+        return { success: false, code: result.code, detail: result.detail };
+    }
+    const created = result.data.createAssets[0];
+    if (created.__typename !== 'Asset') {
+        return { success: false, code: 'REJECTED', detail: created.message };
+    }
     return { success: true };
 }
 
-function parseServerResponse(xhr: XMLHttpRequest): UploadResult {
-    if (xhr.status === 413) return { success: false, error: 'File exceeds the server upload size limit' };
-    if (xhr.status < 200 || xhr.status >= 300) return { success: false, error: `Upload failed (HTTP ${xhr.status})` };
-    return parseGraphqlResponse(xhr.responseText);
-}
-
-function sendUploadRequest(
-    file: File,
-    onProgress: (percent: number) => void,
-): Promise<UploadResult> {
-    return new Promise(resolve => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', buildApiUrl());
-        applyAuthHeaders(xhr);
-
-        xhr.upload.onprogress = e => {
-            if (e.lengthComputable) {
-                onProgress(Math.round((e.loaded / e.total) * 100));
-            }
-        };
-
-        xhr.onload = () => resolve(parseServerResponse(xhr));
-        xhr.onerror = () => resolve({ success: false, error: 'Upload failed — check your connection' });
-
-        xhr.send(buildMultipartBody(file));
-    });
+// Runs `worker` over `items` with at most `limit` running concurrently,
+// rather than firing every upload at once (see MAX_CONCURRENT_UPLOADS).
+export async function runWithConcurrencyLimit<T>(
+    items: T[],
+    limit: number,
+    worker: (item: T, index: number) => Promise<void>,
+): Promise<void> {
+    let cursor = 0;
+    async function runNext(): Promise<void> {
+        const index = cursor++;
+        if (index >= items.length) return;
+        await worker(items[index], index);
+        return runNext();
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runNext));
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -131,11 +99,20 @@ export interface AssetUploadModalProps {
     files: File[];
     open: boolean;
     onClose: () => void;
-    onComplete: () => void;
+    onComplete: (summary: UploadSummary) => void;
 }
 
 export function AssetUploadModal({ files, open, onClose, onComplete }: AssetUploadModalProps) {
     const [fileUploads, setFileUploads] = useState<FileUpload[]>([]);
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    // Latest-value refs so the upload effect below (deliberately scoped to
+    // [open, files]) always calls the current onComplete/onClose rather than
+    // whichever closure was captured when the upload started.
+    const onCompleteRef = useRef(onComplete);
+    onCompleteRef.current = onComplete;
+    const onCloseRef = useRef(onClose);
+    onCloseRef.current = onClose;
 
     useEffect(() => {
         if (!open || !files.length) return;
@@ -147,47 +124,78 @@ export function AssetUploadModal({ files, open, onClose, onComplete }: AssetUplo
         }));
         setFileUploads(initialUploads);
 
-        let active = true;
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
-        async function uploadSingleFile(fileUpload: FileUpload, index: number): Promise<void> {
+        async function uploadSingleFile(fileUpload: FileUpload, index: number): Promise<UploadItemResult> {
             setFileUploads(prev => withUpdatedUpload(prev, index, { status: 'uploading' }));
 
-            const result = await sendUploadRequest(fileUpload.file, percent => {
-                if (active) setFileUploads(prev => withUpdatedUpload(prev, index, { progress: percent }));
-            });
+            const result = await api.uploadWithProgress<ResultOf<typeof createAssetsDocument>>(
+                createAssetsDocument,
+                { input: [{ file: fileUpload.file }] },
+                {
+                    signal: controller.signal,
+                    onProgress: percent =>
+                        setFileUploads(prev => withUpdatedUpload(prev, index, { progress: percent })),
+                },
+            );
 
-            if (!active) return;
-
-            if (result.success) {
-                setFileUploads(prev => withUpdatedUpload(prev, index, { status: 'done', progress: 100 }));
-            } else {
-                setFileUploads(prev => withUpdatedUpload(prev, index, { status: 'error', error: result.error }));
-            }
+            const outcome = interpretUploadResult(result);
+            setFileUploads(prev =>
+                withUpdatedUpload(
+                    prev,
+                    index,
+                    outcome.success
+                        ? { status: 'done', progress: 100 }
+                        : { status: 'error', errorCode: outcome.code, errorDetail: outcome.detail },
+                ),
+            );
+            return outcome;
         }
 
         async function uploadAll(): Promise<void> {
-            await Promise.all(initialUploads.map((upload, index) => uploadSingleFile(upload, index)));
-            if (active) onComplete();
+            const outcomes: UploadItemResult[] = new Array(initialUploads.length);
+            await runWithConcurrencyLimit(initialUploads, MAX_CONCURRENT_UPLOADS, async (upload, index) => {
+                outcomes[index] = await uploadSingleFile(upload, index);
+            });
+
+            if (controller.signal.aborted) return;
+
+            const succeededCount = outcomes.filter(o => o.success).length;
+            onCompleteRef.current({ succeededCount, failedCount: outcomes.length - succeededCount });
+            if (succeededCount === outcomes.length) {
+                onCloseRef.current();
+            }
         }
 
         uploadAll();
 
         return () => {
-            active = false;
+            controller.abort();
         };
     }, [open, files]);
 
+    const handleCancel = useCallback(() => {
+        abortControllerRef.current?.abort();
+        onClose();
+    }, [onClose]);
+
     const doneCount = fileUploads.filter(u => u.status === 'done').length;
+    const finished = allUploadsFinished(fileUploads);
 
     return (
-        <Dialog open={open} onOpenChange={isOpen => { if (!isOpen && allUploadsFinished(fileUploads)) onClose(); }}>
+        <Dialog open={open} onOpenChange={isOpen => { if (!isOpen && finished) onClose(); }}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>
                         <Trans>Uploading assets</Trans>
                     </DialogTitle>
                     <DialogDescription className="sr-only">
-                        <Trans>Upload progress for {fileUploads.length} files</Trans>
+                        <Plural
+                            value={fileUploads.length}
+                            one={`Upload progress for ${fileUploads.length} file`}
+                            other={`Upload progress for ${fileUploads.length} files`}
+                        />
                     </DialogDescription>
                 </DialogHeader>
 
@@ -210,14 +218,23 @@ export function AssetUploadModal({ files, open, onClose, onComplete }: AssetUplo
                                 <span className="text-muted-foreground shrink-0">{upload.progress}%</span>
                             </div>
                             <Progress value={upload.progress} />
-                            {upload.error && <p className="text-xs text-destructive">{upload.error}</p>}
+                            {upload.errorCode && (
+                                <p className="text-xs text-destructive">
+                                    <UploadErrorText code={upload.errorCode} detail={upload.errorDetail} />
+                                </p>
+                            )}
                         </div>
                     ))}
                 </div>
 
                 <DialogFooter>
-                    <Button onClick={onClose} disabled={!allUploadsFinished(fileUploads)}>
-                        {allUploadsFinished(fileUploads) ? <Trans>Close</Trans> : <Trans>Uploading...</Trans>}
+                    {!finished && (
+                        <Button variant="outline" onClick={handleCancel}>
+                            <Trans>Cancel</Trans>
+                        </Button>
+                    )}
+                    <Button onClick={onClose} disabled={!finished}>
+                        {finished ? <Trans>Close</Trans> : <Trans>Uploading...</Trans>}
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -231,5 +248,26 @@ function UploadStatusIcon({ status }: { status: UploadStatus }) {
         case 'uploading': return <Loader2      className="h-4 w-4 animate-spin text-primary shrink-0" />;
         case 'done':      return <CheckCircle2 className="h-4 w-4 text-success shrink-0" />;
         case 'error':     return <XCircle      className="h-4 w-4 text-destructive shrink-0" />;
+    }
+}
+
+function UploadErrorText({ code, detail }: { code: UploadItemErrorCode; detail?: string }) {
+    switch (code) {
+        case 'FILE_TOO_LARGE':
+            return <Trans>File exceeds the server upload size limit</Trans>;
+        case 'HTTP_ERROR':
+            return <Trans>Upload failed (HTTP {detail})</Trans>;
+        case 'NETWORK_ERROR':
+            return <Trans>Upload failed — check your connection</Trans>;
+        case 'TIMEOUT':
+            return <Trans>Upload timed out</Trans>;
+        case 'ABORTED':
+            return <Trans>Upload cancelled</Trans>;
+        case 'INVALID_RESPONSE':
+            return <Trans>Upload failed — invalid server response</Trans>;
+        case 'SERVER_ERROR':
+        case 'REJECTED':
+            // Server-provided message text — already human-readable, not ours to translate.
+            return <>{detail}</>;
     }
 }
