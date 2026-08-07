@@ -36,6 +36,12 @@ describe('parseUploadResponse', () => {
         expect(parseUploadResponse(xhr)).toEqual({ success: false, code: 'INVALID_RESPONSE' });
     });
 
+    it('returns an INVALID_RESPONSE failure when a 200 body has no data', () => {
+        const xhr = { status: 200, responseText: JSON.stringify({}) };
+
+        expect(parseUploadResponse(xhr)).toEqual({ success: false, code: 'INVALID_RESPONSE' });
+    });
+
     it('returns an HTTP_ERROR failure for other non-2xx statuses', () => {
         const xhr = { status: 500, responseText: '' };
 

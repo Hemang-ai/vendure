@@ -159,16 +159,20 @@ export function AssetUploadModal({ files, open, onClose, onComplete }: AssetUplo
                 outcomes[index] = await uploadSingleFile(upload, index);
             });
 
-            if (controller.signal.aborted) return;
-
+            // Report the summary even when aborted: files that finished
+            // before the cancel already exist on the server and need the
+            // gallery to refresh, even though the batch as a whole didn't
+            // fully succeed.
             const succeededCount = outcomes.filter(o => o.success).length;
             onCompleteRef.current({ succeededCount, failedCount: outcomes.length - succeededCount });
-            if (succeededCount === outcomes.length) {
+            if (!controller.signal.aborted && succeededCount === outcomes.length) {
                 onCloseRef.current();
             }
         }
 
-        uploadAll();
+        uploadAll().catch(error => {
+            console.error('Unexpected error while uploading assets:', error);
+        });
 
         return () => {
             controller.abort();

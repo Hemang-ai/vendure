@@ -168,6 +168,8 @@ export type UploadWithProgressResult<T> =
 export interface UploadWithProgressOptions {
     onProgress?: (percent: number) => void;
     signal?: AbortSignal;
+    // Total-request deadline, not an inactivity timeout — opt-in only, since a
+    // large but still-progressing upload would otherwise be killed by a default.
     timeoutMs?: number;
 }
 
@@ -227,21 +229,35 @@ export function parseUploadResponse<T>(xhr: Pick<XMLHttpRequest, 'status' | 'res
         return { success: false, code: 'SERVER_ERROR', detail: graphqlError.message };
     }
 
+    if (!json?.data) {
+        return { success: false, code: 'INVALID_RESPONSE' };
+    }
+
     return { success: true, data: json.data as T };
 }
 
 function uploadWithProgress<T, V extends Variables = Variables>(
     document: RequestDocument | TypedDocumentNode<T, V>,
     variables: V,
-    { onProgress, signal, timeoutMs = 60_000 }: UploadWithProgressOptions = {},
+    { onProgress, signal, timeoutMs }: UploadWithProgressOptions = {},
 ): Promise<UploadWithProgressResult<T>> {
     const documentString = typeof document === 'string' ? document : print(document);
 
     return new Promise(resolve => {
+        // An abort listener added below never fires for a signal that's
+        // already aborted — without this check, an already-cancelled upload
+        // would still be sent to the server.
+        if (signal?.aborted) {
+            resolve({ success: false, code: 'ABORTED' });
+            return;
+        }
+
         const xhr = new XMLHttpRequest();
         xhr.open('POST', buildRequestUrl(API_URL));
         xhr.withCredentials = true;
-        xhr.timeout = timeoutMs;
+        if (timeoutMs !== undefined) {
+            xhr.timeout = timeoutMs;
+        }
         buildRequestHeaders().forEach((value, key) => xhr.setRequestHeader(key, value));
 
         xhr.upload.onprogress = e => {
