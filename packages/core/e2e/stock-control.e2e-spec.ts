@@ -1535,7 +1535,7 @@ describe('Stock control', () => {
             await proceedToArrangingPayment(shopClient);
 
             // Order B (hayden): deplete all remaining saleable stock and settle.
-            // InsufficientStockError is fine here — it adds as many as available to the cart.
+            // InsufficientStockError is fine here — as many units as are available are still added to the cart.
             // This simulates the concurrent order that "wins" the stock between Order A's
             // ArrangingPayment check and its payment settlement.
             await shopClient.asUserWithCredentials('hayden.zieme12@hotmail.com', 'test');
