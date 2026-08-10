@@ -26,6 +26,10 @@ msgstr "全名"
 msgid "Select items"
 msgstr "選取項目"
 
+#: src/lib/components/shared/asset/asset-gallery.tsx
+msgid "Uploading assets..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 msgid "View changes"
@@ -401,6 +405,7 @@ msgstr "至少輸入 2 個字元進行搜尋..."
 #: src/app/routes/_authenticated/_administrators/administrators_.$id.tsx
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 #: src/app/routes/_authenticated/_profile/profile.tsx
+#: src/lib/components/shared/customer-selector.tsx
 msgid "Last name"
 msgstr "姓氏"
 
@@ -600,6 +605,10 @@ msgstr "成功建立產品選項"
 #~ msgid "Parent product"
 #~ msgstr "父級產品"
 
+#: src/lib/components/shared/customer-selector.tsx
+msgid "Create new customer"
+msgstr ""
+
 #: src/lib/framework/dashboard-widget/low-stock-widget/index.tsx
 msgid "We couldn't load the stock levels"
 msgstr "無法載入庫存水準"
@@ -639,6 +648,14 @@ msgstr "程式碼區塊"
 #: src/app/routes/_authenticated/_products/components/product-options-table.tsx
 msgid "Search options..."
 msgstr "搜尋選項..."
+
+#. placeholder {0}: succeeded.length
+#. placeholder {1}: succeeded.length
+#. placeholder {2}: succeeded.length
+#: src/lib/components/shared/assign-to-channel-dialog.tsx
+#: src/lib/components/shared/assign-to-channel-dialog.tsx
+msgid "{0, plural, one {Assigned {entityIdsLength} {entityType} to {1} channel} other {Assigned {entityIdsLength} {entityType} to {2} channels}}"
+msgstr ""
 
 #: src/lib/framework/dashboard-widget/metrics-widget/index.tsx
 #: src/lib/framework/dashboard-widget/metrics-widget/index.tsx
@@ -873,6 +890,7 @@ msgstr "可用貨幣"
 
 #: src/app/routes/_authenticated/_customer-groups/components/customer-group-members-table.tsx
 #: src/app/routes/_authenticated/_customers/customers.tsx
+#: src/lib/components/shared/customer-selector.tsx
 msgid "Search customers..."
 msgstr "搜尋客戶..."
 
@@ -1052,6 +1070,11 @@ msgstr "客戶"
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 msgid "Metadata returned by the payment handler."
 msgstr "付款處理程式傳回的中繼資料。"
+
+#: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
+#: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
+msgid "Update address"
+msgstr ""
 
 #: src/lib/components/shared/error-page.tsx
 msgid "Page not found"
@@ -1348,6 +1371,7 @@ msgid "Assets"
 msgstr "資源"
 
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
+#: src/lib/components/shared/customer-selector.tsx
 msgid "Email address"
 msgstr "電子郵件地址"
 
@@ -1905,6 +1929,7 @@ msgstr "插入 {row}×{col} 表格"
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
 #: src/lib/components/shared/confirmation-dialog.tsx
 #: src/lib/components/shared/customer-address-form.tsx
+#: src/lib/components/shared/customer-selector.tsx
 #: src/lib/components/shared/navigation-confirmation.tsx
 #: src/lib/components/shared/rich-text-editor/image-dialog.tsx
 #: src/lib/components/shared/rich-text-editor/link-bubble-menu.tsx
@@ -2001,6 +2026,10 @@ msgstr "稅務類別"
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 msgid "Private collections are not visible in the shop"
 msgstr "私人集合在商店中不可見"
+
+#: src/lib/components/shared/customer-selector.tsx
+msgid "Create customer"
+msgstr ""
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "When enabled, a product is available in the shop"
@@ -2962,6 +2991,10 @@ msgstr "檢視資料"
 msgid "Delete View"
 msgstr "刪除檢視"
 
+#: src/lib/components/shared/assign-to-channel-dialog.tsx
+msgid "Failed to assign {entityIdsLength} {entityType} to the selected channels"
+msgstr ""
+
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 msgid "Add a new address to the customer."
 msgstr "為客戶新增地址。"
@@ -3433,10 +3466,9 @@ msgstr "未知商品"
 msgid "Address updated"
 msgstr "地址已更新"
 
-#. placeholder {0}: selectedChannelIds.length
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
-msgid "Successfully assigned {entityIdsLength} {entityType} to {0} channels"
-msgstr ""
+#~ msgid "Successfully assigned {entityIdsLength} {entityType} to {0} channels"
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_orders/hooks/use-refund-order.ts
 msgid "Refund processed successfully"
@@ -3726,11 +3758,9 @@ msgstr "指派"
 msgid "Successfully created seller"
 msgstr "已成功建立賣家"
 
-#. placeholder {0}: failedChannelIds.length
-#. placeholder {1}: selectedChannelIds.length
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
-msgid "Failed to assign {entityIdsLength} {entityType} to {0} of {1} channels"
-msgstr ""
+#~ msgid "Failed to assign {entityIdsLength} {entityType} to {0} of {1} channels"
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_profile/profile.tsx
 msgid "Failed to update profile picture"
@@ -3889,8 +3919,8 @@ msgid "Shipping Methods"
 msgstr "配送方式"
 
 #: src/app/routes/_authenticated/_orders/components/customer-address-selector.tsx
-msgid "Select an address"
-msgstr "選取一個地址"
+#~ msgid "Select an address"
+#~ msgstr "選取一個地址"
 
 #: src/app/routes/_authenticated/_system/settings-store.tsx
 #: src/lib/components/data-display/boolean.tsx
@@ -3959,6 +3989,10 @@ msgstr "不等於"
 msgid "Refresh"
 msgstr "重新整理"
 
+#: src/lib/components/shared/customer-selector.tsx
+msgid "Existing customer"
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/components/create-product-options-dialog.tsx
 #~ msgid "e.g. Size"
 #~ msgstr "例如：尺寸"
@@ -4010,6 +4044,10 @@ msgstr "選取項目"
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "New product"
 msgstr "新增商品"
+
+#: src/lib/components/shared/assign-to-channel-dialog.tsx
+msgid "Failed for: {failedCodes}"
+msgstr ""
 
 #: src/app/routes/_authenticated/_assets/components/manage-tags-dialog.tsx
 msgid "Manage Tags"
@@ -4132,6 +4170,10 @@ msgstr "已成功建立屬性值"
 msgid "Marketing"
 msgstr "行銷"
 
+#: src/app/routes/_authenticated/_orders/components/customer-address-selector.tsx
+msgid "Existing address"
+msgstr ""
+
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Draft order deleted"
 msgstr "草稿訂單已刪除"
@@ -4154,6 +4196,7 @@ msgid "Remove from channel"
 msgstr "從頻道中移除"
 
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
+#: src/lib/components/shared/customer-selector.tsx
 #: src/lib/components/shared/rich-text-editor/image-dialog.tsx
 msgid "Title"
 msgstr "標題"
@@ -4200,6 +4243,13 @@ msgstr "{0} 個變體"
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 msgid "Failed to settle payment"
 msgstr "完成付款失敗"
+
+#. placeholder {0}: failed.length
+#. placeholder {1}: failed.length
+#. placeholder {2}: failed.length
+#: src/lib/components/shared/assign-to-channel-dialog.tsx
+msgid "{0, plural, one {Failed to assign {entityIdsLength} {entityType} to {1} channel} other {Failed to assign {entityIdsLength} {entityType} to {2} channels}}"
+msgstr ""
 
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
 msgid "No billing address"
@@ -5530,6 +5580,10 @@ msgstr "編輯成員"
 msgid "Stock on hand"
 msgstr "現有庫存"
 
+#: src/app/routes/_authenticated/_orders/components/customer-address-selector.tsx
+msgid "New address"
+msgstr ""
+
 #. placeholder {0}: summary.count
 #: src/lib/components/shared/configurable-operation-arg-summary.tsx
 msgid "{0} properties"
@@ -6034,6 +6088,11 @@ msgstr "預設語言"
 msgid "Status"
 msgstr "狀態"
 
+#: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
+#: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
+msgid "Okay"
+msgstr ""
+
 #: src/lib/components/shared/configurable-operation-multi-selector.tsx
 #: src/lib/components/shared/configurable-operation-selector.tsx
 msgid "No options found"
@@ -6159,6 +6218,7 @@ msgstr "處理退款失敗"
 #: src/app/routes/_authenticated/_administrators/administrators_.$id.tsx
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 #: src/app/routes/_authenticated/_profile/profile.tsx
+#: src/lib/components/shared/customer-selector.tsx
 msgid "First name"
 msgstr "名字"
 
@@ -7070,6 +7130,7 @@ msgid "Order process"
 msgstr "訂單流程"
 
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
+#: src/lib/components/shared/customer-selector.tsx
 msgid "Phone number"
 msgstr "電話號碼"
 

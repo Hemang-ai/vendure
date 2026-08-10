@@ -26,6 +26,10 @@ msgstr "Volledige naam"
 msgid "Select items"
 msgstr "Selecteer items"
 
+#: src/lib/components/shared/asset/asset-gallery.tsx
+msgid "Uploading assets..."
+msgstr ""
+
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 #: src/app/routes/_authenticated/_customers/components/customer-history/default-customer-history-components.tsx
 msgid "View changes"
@@ -401,6 +405,7 @@ msgstr "Typ minstens 2 tekens om te zoeken..."
 #: src/app/routes/_authenticated/_administrators/administrators_.$id.tsx
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 #: src/app/routes/_authenticated/_profile/profile.tsx
+#: src/lib/components/shared/customer-selector.tsx
 msgid "Last name"
 msgstr "Achternaam"
 
@@ -600,6 +605,10 @@ msgstr "Productoptie succesvol aangemaakt"
 #~ msgid "Parent product"
 #~ msgstr "Hoofdproduct"
 
+#: src/lib/components/shared/customer-selector.tsx
+msgid "Create new customer"
+msgstr ""
+
 #: src/lib/framework/dashboard-widget/low-stock-widget/index.tsx
 msgid "We couldn't load the stock levels"
 msgstr "We konden de voorraadniveaus niet laden"
@@ -639,6 +648,14 @@ msgstr "Codeblok"
 #: src/app/routes/_authenticated/_products/components/product-options-table.tsx
 msgid "Search options..."
 msgstr "Opties zoeken..."
+
+#. placeholder {0}: succeeded.length
+#. placeholder {1}: succeeded.length
+#. placeholder {2}: succeeded.length
+#: src/lib/components/shared/assign-to-channel-dialog.tsx
+#: src/lib/components/shared/assign-to-channel-dialog.tsx
+msgid "{0, plural, one {Assigned {entityIdsLength} {entityType} to {1} channel} other {Assigned {entityIdsLength} {entityType} to {2} channels}}"
+msgstr ""
 
 #: src/lib/framework/dashboard-widget/metrics-widget/index.tsx
 #: src/lib/framework/dashboard-widget/metrics-widget/index.tsx
@@ -873,6 +890,7 @@ msgstr "Beschikbare valuta's"
 
 #: src/app/routes/_authenticated/_customer-groups/components/customer-group-members-table.tsx
 #: src/app/routes/_authenticated/_customers/customers.tsx
+#: src/lib/components/shared/customer-selector.tsx
 msgid "Search customers..."
 msgstr "Klanten zoeken..."
 
@@ -1056,6 +1074,11 @@ msgstr "Klant"
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 msgid "Metadata returned by the payment handler."
 msgstr "Metadata geretourneerd door de betalingshandler."
+
+#: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
+#: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
+msgid "Update address"
+msgstr ""
 
 #: src/lib/components/shared/error-page.tsx
 msgid "Page not found"
@@ -1352,6 +1375,7 @@ msgid "Assets"
 msgstr "Middelen"
 
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
+#: src/lib/components/shared/customer-selector.tsx
 msgid "Email address"
 msgstr "E-mailadres"
 
@@ -1909,6 +1933,7 @@ msgstr "Tabel van {row} bij {col} invoegen"
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
 #: src/lib/components/shared/confirmation-dialog.tsx
 #: src/lib/components/shared/customer-address-form.tsx
+#: src/lib/components/shared/customer-selector.tsx
 #: src/lib/components/shared/navigation-confirmation.tsx
 #: src/lib/components/shared/rich-text-editor/image-dialog.tsx
 #: src/lib/components/shared/rich-text-editor/link-bubble-menu.tsx
@@ -2005,6 +2030,10 @@ msgstr "Belastingcategorieën"
 #: src/app/routes/_authenticated/_collections/collections_.$id.tsx
 msgid "Private collections are not visible in the shop"
 msgstr "Privécollecties zijn niet zichtbaar in de winkel"
+
+#: src/lib/components/shared/customer-selector.tsx
+msgid "Create customer"
+msgstr ""
 
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "When enabled, a product is available in the shop"
@@ -2956,6 +2985,10 @@ msgstr "Gegevens bekijken"
 msgid "Delete View"
 msgstr "Weergave verwijderen"
 
+#: src/lib/components/shared/assign-to-channel-dialog.tsx
+msgid "Failed to assign {entityIdsLength} {entityType} to the selected channels"
+msgstr ""
+
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 msgid "Add a new address to the customer."
 msgstr "Voeg een nieuw adres toe aan de klant."
@@ -3427,10 +3460,9 @@ msgstr "Onbekend product"
 msgid "Address updated"
 msgstr "Adres bijgewerkt"
 
-#. placeholder {0}: selectedChannelIds.length
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
-msgid "Successfully assigned {entityIdsLength} {entityType} to {0} channels"
-msgstr ""
+#~ msgid "Successfully assigned {entityIdsLength} {entityType} to {0} channels"
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_orders/hooks/use-refund-order.ts
 msgid "Refund processed successfully"
@@ -3720,11 +3752,9 @@ msgstr "Toewijzen"
 msgid "Successfully created seller"
 msgstr "Verkoper succesvol aangemaakt"
 
-#. placeholder {0}: failedChannelIds.length
-#. placeholder {1}: selectedChannelIds.length
 #: src/lib/components/shared/assign-to-channel-dialog.tsx
-msgid "Failed to assign {entityIdsLength} {entityType} to {0} of {1} channels"
-msgstr ""
+#~ msgid "Failed to assign {entityIdsLength} {entityType} to {0} of {1} channels"
+#~ msgstr ""
 
 #: src/app/routes/_authenticated/_profile/profile.tsx
 msgid "Failed to update profile picture"
@@ -3883,8 +3913,8 @@ msgid "Shipping Methods"
 msgstr "Verzendmethoden"
 
 #: src/app/routes/_authenticated/_orders/components/customer-address-selector.tsx
-msgid "Select an address"
-msgstr "Selecteer een adres"
+#~ msgid "Select an address"
+#~ msgstr "Selecteer een adres"
 
 #: src/app/routes/_authenticated/_system/settings-store.tsx
 #: src/lib/components/data-display/boolean.tsx
@@ -3953,6 +3983,10 @@ msgstr "is niet gelijk aan"
 msgid "Refresh"
 msgstr "Vernieuwen"
 
+#: src/lib/components/shared/customer-selector.tsx
+msgid "Existing customer"
+msgstr ""
+
 #: src/app/routes/_authenticated/_products/components/create-product-options-dialog.tsx
 #~ msgid "e.g. Size"
 #~ msgstr "bijv. Maat"
@@ -4004,6 +4038,10 @@ msgstr "Selecteer item"
 #: src/app/routes/_authenticated/_products/products_.$id.tsx
 msgid "New product"
 msgstr "Nieuw product"
+
+#: src/lib/components/shared/assign-to-channel-dialog.tsx
+msgid "Failed for: {failedCodes}"
+msgstr ""
 
 #: src/app/routes/_authenticated/_assets/components/manage-tags-dialog.tsx
 msgid "Manage Tags"
@@ -4123,6 +4161,10 @@ msgstr "Facetwaarde succesvol aangemaakt"
 msgid "Marketing"
 msgstr "Marketing"
 
+#: src/app/routes/_authenticated/_orders/components/customer-address-selector.tsx
+msgid "Existing address"
+msgstr ""
+
 #: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
 msgid "Draft order deleted"
 msgstr "Conceptbestelling verwijderd"
@@ -4145,6 +4187,7 @@ msgid "Remove from channel"
 msgstr "Verwijderen uit kanaal"
 
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
+#: src/lib/components/shared/customer-selector.tsx
 #: src/lib/components/shared/rich-text-editor/image-dialog.tsx
 msgid "Title"
 msgstr "Titel"
@@ -4191,6 +4234,13 @@ msgstr "{0} varianten"
 #: src/app/routes/_authenticated/_orders/components/payment-details.tsx
 msgid "Failed to settle payment"
 msgstr "Betaling afhandelen mislukt"
+
+#. placeholder {0}: failed.length
+#. placeholder {1}: failed.length
+#. placeholder {2}: failed.length
+#: src/lib/components/shared/assign-to-channel-dialog.tsx
+msgid "{0, plural, one {Failed to assign {entityIdsLength} {entityType} to {1} channel} other {Failed to assign {entityIdsLength} {entityType} to {2} channels}}"
+msgstr ""
 
 #: src/app/routes/_authenticated/_orders/orders_.$id_.modify.tsx
 msgid "No billing address"
@@ -5525,6 +5575,10 @@ msgstr "Leden bewerken"
 msgid "Stock on hand"
 msgstr "Voorraad op voorraad"
 
+#: src/app/routes/_authenticated/_orders/components/customer-address-selector.tsx
+msgid "New address"
+msgstr ""
+
 #. placeholder {0}: summary.count
 #: src/lib/components/shared/configurable-operation-arg-summary.tsx
 msgid "{0} properties"
@@ -6029,6 +6083,11 @@ msgstr "Standaardtaal"
 msgid "Status"
 msgstr "Status"
 
+#: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
+#: src/app/routes/_authenticated/_orders/orders_.draft.$id.tsx
+msgid "Okay"
+msgstr ""
+
 #: src/lib/components/shared/configurable-operation-multi-selector.tsx
 #: src/lib/components/shared/configurable-operation-selector.tsx
 msgid "No options found"
@@ -6154,6 +6213,7 @@ msgstr "Verwerking van restitutie mislukt"
 #: src/app/routes/_authenticated/_administrators/administrators_.$id.tsx
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
 #: src/app/routes/_authenticated/_profile/profile.tsx
+#: src/lib/components/shared/customer-selector.tsx
 msgid "First name"
 msgstr "Voornaam"
 
@@ -7065,6 +7125,7 @@ msgid "Order process"
 msgstr "Bestelproces"
 
 #: src/app/routes/_authenticated/_customers/customers_.$id.tsx
+#: src/lib/components/shared/customer-selector.tsx
 msgid "Phone number"
 msgstr "Telefoonnummer"
 

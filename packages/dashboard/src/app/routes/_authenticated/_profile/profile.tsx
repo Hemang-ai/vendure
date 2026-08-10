@@ -34,7 +34,7 @@ import { toast } from 'sonner';
 import {
     activeAdministratorDocument,
     setActiveAdministratorAvatarDocument,
-    updateAdministratorDocument,
+    updateActiveAdministratorDocument,
 } from './profile.graphql.js';
 
 const pageId = 'profile';
@@ -91,11 +91,10 @@ function ProfilePage() {
     const { form, submitHandler, isPending, entity } = useDetailPage({
         queryDocument: activeAdministratorDocument,
         entityField: 'activeAdministrator',
-        updateDocument: updateAdministratorDocument,
+        updateDocument: updateActiveAdministratorDocument,
         pageId,
         setValuesForUpdate: entity => {
             return {
-                id: entity.id,
                 firstName: entity.firstName,
                 lastName: entity.lastName,
                 emailAddress: entity.emailAddress,
