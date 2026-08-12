@@ -1,3 +1,4 @@
+import type { ConfigurableOperationDefType } from '../common/configurable-operation';
 import type { CollectionFilter } from './catalog/collection-filter';
 import type { ConfigService } from './config.service';
 import type { EntityDuplicator } from './entity/entity-duplicator';
@@ -24,7 +25,12 @@ export type ConfigDefTypeMap = {
     ShippingEligibilityChecker: ShippingEligibilityChecker;
 };
 
-export type ConfigDefType = keyof ConfigDefTypeMap;
+/**
+ * Aliased to the union declared alongside ConfigurableOperationDef, because the same names are also
+ * used as translation key segments. Indexing ConfigDefTypeMap by it below means a name in the union
+ * with no entry in the map is a compile error.
+ */
+export type ConfigDefType = ConfigurableOperationDefType;
 
 /**
  * The single source of truth enumerating every configurable-operation registry, keyed by type. The

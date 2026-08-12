@@ -5,8 +5,8 @@ import { runPluginConfigurations } from './bootstrap';
 import { CustomFieldConfig } from './config/custom-field/custom-field-types';
 import { RuntimeVendureConfig } from './config/vendure-config';
 // Importing the core entities registers their `customFields` embedded columns in the
-// TypeORM metadata, which is how getEntityNamesWithCustomFields() detects the entities
-// that support custom fields. Imported for its side effect only.
+// TypeORM metadata, and populates `coreEntitiesMap` (which `getAllEntities`, and therefore the
+// auto-init seeding, reads). Imported for its side effect only.
 import './entity/entities';
 import { registerCustomEntityFields } from './entity/register-custom-entity-fields';
 import { VendurePlugin } from './plugin/vendure-plugin';
@@ -59,6 +59,17 @@ describe('runPluginConfigurations()', () => {
         expect(config.customFields.Customer).toEqual([]);
     });
 
+    // OSS-653: runPluginConfigurations is also called directly (CLI/dashboard schema generators,
+    // codegen) with a config that never passed through preBootstrapConfig, so `dbConnectionOptions`
+    // carries no `entities`. Seeding must still work there — the entity list is derived from
+    // `config` (core entities + plugin entities) via getAllEntities, not from dbConnectionOptions.
+    it('seeds core entities when the config has no dbConnectionOptions.entities', async () => {
+        const config = makeConfig({});
+        expect((config as any).dbConnectionOptions?.entities).toBeUndefined();
+        await runPluginConfigurations(config);
+        expect(config.customFields.Product).toEqual([]);
+    });
+
     // OSS-408: translation entities also declare a `customFields` embedded (for localized
     // values), but must NOT be auto-initialised — a `config.customFields.<Entity>Translation`
     // entry makes the GraphQL schema builder emit a duplicate `customFields` field on the
@@ -68,6 +79,58 @@ describe('runPluginConfigurations()', () => {
         await runPluginConfigurations(config);
         expect(config.customFields.ProductTranslation).toBeUndefined();
         expect(config.customFields.CollectionTranslation).toBeUndefined();
+    });
+
+    // OSS-653: seeding must be scoped to the entities registered with THIS server, not the global
+    // TypeORM metadata storage. An entity whose `customFields` embedded is present in the process
+    // (e.g. a second test server in the same process, or an imported-but-uninstalled plugin) but
+    // is not in this server's entity list must not produce a phantom `config.customFields` key.
+    it('does not seed customFields for entities not registered with this server', async () => {
+        const storage = getMetadataArgsStorage();
+        class Oss653PhantomEntity {}
+        storage.embeddeds.push({
+            target: Oss653PhantomEntity,
+            propertyName: 'customFields',
+            prefix: undefined,
+            type: () => Oss653PhantomEntity,
+        } as any);
+        try {
+            const config = makeConfig({});
+            await runPluginConfigurations(config);
+            // a real, registered entity is still seeded…
+            expect(config.customFields.Product).toEqual([]);
+            // …but the phantom entity present only in the global metadata is not
+            expect(config.customFields.Oss653PhantomEntity).toBeUndefined();
+        } finally {
+            storage.embeddeds.pop();
+        }
+    });
+
+    // OSS-408: the core point of the feature — a plugin's OWN entity that supports custom fields
+    // gets a seeded key too, so the plugin's `configuration` callback can extend it without a
+    // defensive guard. Contrast with the phantom-entity test above: seeding happens here because
+    // the entity is registered with this server (via the plugin's `entities`), not merely present
+    // in the global metadata.
+    it('seeds customFields for a plugin-registered entity', async () => {
+        const storage = getMetadataArgsStorage();
+        class Oss408PluginEntity {}
+        storage.embeddeds.push({
+            target: Oss408PluginEntity,
+            propertyName: 'customFields',
+            prefix: undefined,
+            type: () => Oss408PluginEntity,
+        } as any);
+
+        @VendurePlugin({ entities: [Oss408PluginEntity] })
+        class TestPlugin {}
+
+        try {
+            const config = makeConfig({ plugins: [TestPlugin] });
+            await runPluginConfigurations(config);
+            expect(config.customFields.Oss408PluginEntity).toEqual([]);
+        } finally {
+            storage.embeddeds.pop();
+        }
     });
 
     it('does not overwrite an existing customFields entry', async () => {

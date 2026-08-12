@@ -630,6 +630,13 @@ export function AssetGallery({
                     </div>
                 )}
 
+                {isUploading && (
+                    <div className="absolute inset-0 bg-background/70 backdrop-blur-sm z-10 flex flex-col items-center justify-center rounded-md">
+                        <Loader2 className="h-10 w-10 text-primary animate-spin mb-3" />
+                        <p className="text-center font-medium"><Trans>Uploading assets...</Trans></p>
+                    </div>
+                )}
+
                 {viewMode === 'list' ? (
                     <AssetListDataTable
                         selectable={selectable}

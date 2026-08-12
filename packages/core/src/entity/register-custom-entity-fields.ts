@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/ban-types */
-import { CustomFieldType } from '@vendure/common/lib/shared-types';
+import { CustomFieldType, Type } from '@vendure/common/lib/shared-types';
 import { assertNever } from '@vendure/common/lib/shared-utils';
 import {
     Column,
@@ -48,8 +48,16 @@ const MAX_STRING_LENGTH = 65535;
  * translation entities as the target of a `translations` relation, the same signal
  * `registerCustomEntityFields` uses to locate the translation type.
  */
-export function getEntityNamesWithCustomFields(): string[] {
+export function getEntityNamesWithCustomFields(entities: Array<Type<any>>): string[] {
+    // Scope to the entities actually registered with this server. The global metadata storage
+    // holds every entity imported anywhere in the process — including ones not registered here
+    // (a second server in the same process, or an imported-but-uninstalled plugin) — which would
+    // otherwise seed phantom `config.customFields` keys.
+    const registeredEntityNames = new Set(entities.map(entity => entity.name));
     const metadataArgsStorage = getMetadataArgsStorage();
+    // The translation-entity exclusion set is intentionally built from the process-global metadata:
+    // it is only ever used to exclude, and the candidate names are already filtered to
+    // `registeredEntityNames` below, so a superset here is harmless.
     const translationEntityNames = new Set(
         metadataArgsStorage.relations
             .filter(relation => relation.propertyName === 'translations')
@@ -59,6 +67,7 @@ export function getEntityNamesWithCustomFields(): string[] {
     const names = metadataArgsStorage.embeddeds
         .filter(embedded => embedded.propertyName === 'customFields')
         .map(embedded => (typeof embedded.target === 'string' ? embedded.target : embedded.target.name))
+        .filter(name => registeredEntityNames.has(name))
         .filter(name => !translationEntityNames.has(name));
     return Array.from(new Set(names));
 }

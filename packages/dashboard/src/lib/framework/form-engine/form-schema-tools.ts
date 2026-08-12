@@ -258,7 +258,7 @@ function applyCustomFieldModifiers(zodType: ZodType, customField: CustomFieldCon
     if (customField.list) {
         modifiedType = z.array(modifiedType);
     }
-    if (customField.nullable !== false) {
+    if (customField.nullable !== false || customField.readonly) {
         modifiedType = modifiedType.optional().nullable();
     }
     if (customField.readonly) {

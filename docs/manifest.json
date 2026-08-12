@@ -1,7 +1,7 @@
 {
   "id": "core",
   "name": "Vendure Core Documentation",
-  "version": "3.7.1",
+  "version": "3.7.2",
   "vendureVersion": "v3",
   "navigation": [
     {
@@ -398,7 +398,7 @@
           "title": "Translations",
           "slug": "translations",
           "file": "docs/guides/developer-guide/translations/index.mdx",
-          "lastModified": "2026-02-12T16:47:03+01:00"
+          "lastModified": "2026-08-10T11:56:26+02:00"
         },
         {
           "title": "Uploading Files",
@@ -1216,7 +1216,7 @@
                   "title": "I18nService",
                   "slug": "i18n-service",
                   "file": "docs/reference/typescript-api/common/i18n-service.mdx",
-                  "lastModified": "2026-04-20T16:08:16+02:00"
+                  "lastModified": "2026-08-05T09:44:37+02:00"
                 },
                 {
                   "title": "ID",
@@ -1328,7 +1328,7 @@
                   "title": "ConfigArgs",
                   "slug": "config-args",
                   "file": "docs/reference/typescript-api/configurable-operation-def/config-args.mdx",
-                  "lastModified": "2026-07-31T11:54:35+02:00"
+                  "lastModified": "2026-08-05T09:44:37+02:00"
                 },
                 {
                   "title": "ConfigArgType",
@@ -1340,7 +1340,25 @@
                   "title": "ConfigurableOperationDefOptions",
                   "slug": "configurable-operation-def-options",
                   "file": "docs/reference/typescript-api/configurable-operation-def/configurable-operation-def-options.mdx",
-                  "lastModified": "2026-07-31T11:54:35+02:00"
+                  "lastModified": "2026-08-05T09:44:37+02:00"
+                },
+                {
+                  "title": "ConfigurableOperationDefType",
+                  "slug": "configurable-operation-def-type",
+                  "file": "docs/reference/typescript-api/configurable-operation-def/configurable-operation-def-type.mdx",
+                  "lastModified": "2026-08-05T09:44:37+02:00"
+                },
+                {
+                  "title": "ConfigurableOperationTranslationKey",
+                  "slug": "configurable-operation-translation-key",
+                  "file": "docs/reference/typescript-api/configurable-operation-def/configurable-operation-translation-key.mdx",
+                  "lastModified": "2026-08-05T09:44:37+02:00"
+                },
+                {
+                  "title": "ConfigurableOperationTranslator",
+                  "slug": "configurable-operation-translator",
+                  "file": "docs/reference/typescript-api/configurable-operation-def/configurable-operation-translator.mdx",
+                  "lastModified": "2026-08-05T09:44:37+02:00"
                 },
                 {
                   "title": "DefaultFormComponentId",
@@ -1361,7 +1379,7 @@
                   "lastModified": "2026-07-31T11:54:35+02:00"
                 }
               ],
-              "lastModified": "2026-07-31T11:54:35+02:00"
+              "lastModified": "2026-08-05T09:44:37+02:00"
             },
             {
               "title": "Configuration",
@@ -2790,13 +2808,13 @@
                   "title": "RequestContext",
                   "slug": "request-context",
                   "file": "docs/reference/typescript-api/request/request-context.mdx",
-                  "lastModified": "2026-01-28T14:49:21+01:00"
+                  "lastModified": "2026-08-10T11:56:26+02:00"
                 },
                 {
                   "title": "RequestContextService",
                   "slug": "request-context-service",
                   "file": "docs/reference/typescript-api/request/request-context-service.mdx",
-                  "lastModified": "2026-07-20T16:45:15+02:00"
+                  "lastModified": "2026-08-10T11:56:26+02:00"
                 },
                 {
                   "title": "Transaction Decorator",
@@ -3060,7 +3078,7 @@
                   "title": "PromotionService",
                   "slug": "promotion-service",
                   "file": "docs/reference/typescript-api/services/promotion-service.mdx",
-                  "lastModified": "2026-06-30T07:18:09+02:00"
+                  "lastModified": "2026-08-11T14:21:36Z"
                 },
                 {
                   "title": "ProvinceService",
@@ -3426,7 +3444,7 @@
                   "title": "SimpleGraphQLClient",
                   "slug": "simple-graph-qlclient",
                   "file": "docs/reference/typescript-api/testing/simple-graph-qlclient.mdx",
-                  "lastModified": "2026-06-29T23:14:39+02:00"
+                  "lastModified": "2026-08-10T11:56:26+02:00"
                 },
                 {
                   "title": "TestConfig",
@@ -4267,7 +4285,7 @@
                   "title": "ListPage",
                   "slug": "list-page",
                   "file": "docs/reference/dashboard/list-views/list-page.mdx",
-                  "lastModified": "2026-07-16T14:41:21+02:00"
+                  "lastModified": "2026-08-11T14:21:36Z"
                 },
                 {
                   "title": "PaginatedListDataTable",
