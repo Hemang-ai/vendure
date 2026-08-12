@@ -739,30 +739,26 @@ test.describe('collection update sends only changed fields (OSS-567)', () => {
     });
 
     test('editing only the name submits just id + translations, not filters', async ({ page }) => {
+        const dp = new BaseDetailPage(page, {
+            newPath: '/collections/new',
+            pathPrefix: '/collections/',
+            newTitle: 'New collection',
+        });
         await page.goto(`/collections/${collectionId}`);
-        const nameField = page
-            .getByRole('main')
-            .locator('[data-slot="field"]')
-            .filter({
-                has: page.locator('[data-slot="field-label"]').getByText('Name', { exact: true }),
-            })
-            .getByRole('textbox')
-            .first();
-        await expect(nameField).toBeVisible({ timeout: 10_000 });
+        await expect(dp.formItem('Name').getByRole('textbox')).toBeVisible({ timeout: 10_000 });
         const newName = `OSS567 Collection ${Date.now()}`;
-        await nameField.fill(newName);
+        await dp.fillInput('Name', newName);
 
         const updateRequest = page.waitForRequest(
             req => req.method() === 'POST' && (req.postData() ?? '').includes('mutation UpdateCollection('),
             { timeout: 15_000 },
         );
-        await page.getByRole('button', { name: 'Update' }).click();
+        await dp.clickUpdate();
         const input = (await updateRequest).postDataJSON()?.variables?.input;
 
+        // The exhaustive key assertion already proves filters/inheritFilters are omitted.
         expect(input).toBeTruthy();
         expect(Object.keys(input).sort()).toEqual(['id', 'translations']);
-        expect(input.filters).toBeUndefined();
-        expect(input.inheritFilters).toBeUndefined();
         expect(input.translations?.[0]?.name).toBe(newName);
 
         await expect(

@@ -726,18 +726,14 @@ test.describe('variant detail option & stock editing (PRD)', () => {
         await sizeInput.fill('ZZZ');
         await sizeInput.press('Enter');
         await expect(sizeInput).toHaveValue('ZZZ');
-        await expect(
-            page.locator('[data-sonner-toast]').filter({ hasText: /updated/i }),
-        ).toHaveCount(0);
+        await expect(page.locator('[data-sonner-toast]').filter({ hasText: /updated/i })).toHaveCount(0);
 
         // Picking a suggestion with Enter (popup open) still works — and still no submit.
         await sizeInput.fill('La');
         await sizeInput.press('ArrowDown');
         await sizeInput.press('Enter');
         await expect(sizeInput).toHaveValue('Large');
-        await expect(
-            page.locator('[data-sonner-toast]').filter({ hasText: /updated/i }),
-        ).toHaveCount(0);
+        await expect(page.locator('[data-sonner-toast]').filter({ hasText: /updated/i })).toHaveCount(0);
 
         // Definitive: a reload shows the original option — nothing was persisted.
         await page.reload();
@@ -780,9 +776,7 @@ test.describe('variant detail option & stock editing (PRD)', () => {
         await skuInput.press('Enter');
 
         // No success toast, and a reload shows the option unchanged.
-        await expect(
-            page.locator('[data-sonner-toast]').filter({ hasText: /updated/i }),
-        ).toHaveCount(0);
+        await expect(page.locator('[data-sonner-toast]').filter({ hasText: /updated/i })).toHaveCount(0);
         await page.reload();
         await expect(page.getByLabel('Size', { exact: true })).toHaveValue('Small', {
             timeout: 10_000,
@@ -987,18 +981,60 @@ test.describe('variant with no option groups', () => {
 // changed, so an untouched field's stale page-load value cannot silently
 // overwrite a concurrent edit by another admin or the API.
 test.describe('variant update sends only changed fields (OSS-567)', () => {
+    test.describe.configure({ mode: 'serial' });
+
+    let productId: string;
+    let variantId: string;
+
+    // Create a dedicated product + variant instead of editing a seed variant: this test renames
+    // and saves, and mutating shared seed data (a "Laptop" variant) pollutes other specs. Seed the
+    // variant with a non-empty `facetValueIds` so the assertion below proves the unchanged non-empty
+    // replace-array is *omitted* (not merely that an empty one is).
+    test.beforeAll(async ({ browser }) => {
+        const page = await browser.newPage();
+        const client = new VendureAdminClient(page);
+        await client.login();
+        const { facetValues } = await client.gql(
+            `query { facetValues(options: { take: 1 }) { items { id } } }`,
+        );
+        const facetValueId = facetValues.items[0].id as string;
+        const product = await client.gql(
+            `mutation ($input: CreateProductInput!) { createProduct(input: $input) { id } }`,
+            {
+                input: {
+                    translations: [
+                        {
+                            languageCode: 'en',
+                            name: 'OSS567 Variant Product',
+                            slug: `oss567-variant-product-${Date.now()}`,
+                            description: '',
+                        },
+                    ],
+                },
+            },
+        );
+        productId = product.createProduct.id;
+        const variants = await client.gql(
+            `mutation ($input: [CreateProductVariantInput!]!) { createProductVariants(input: $input) { id } }`,
+            {
+                input: [
+                    {
+                        productId,
+                        sku: `OSS567-SEED-${Date.now()}`,
+                        price: 1000,
+                        optionIds: [],
+                        facetValueIds: [facetValueId],
+                        translations: [{ languageCode: 'en', name: 'OSS567 Variant' }],
+                    },
+                ],
+            },
+        );
+        variantId = variants.createProductVariants[0].id;
+        await page.close();
+    });
+
     test('editing only the SKU submits just id + sku', async ({ page }) => {
-        // Open a Laptop variant detail page (seed data — has facets, assets, translations).
-        await page.goto('/product-variants');
-        await expect(page.getByRole('heading', { name: 'Product Variants' })).toBeVisible({
-            timeout: 10_000,
-        });
-        await page
-            .locator('table')
-            .getByRole('button', { name: /Laptop/ })
-            .first()
-            .click();
-        await expect(page).toHaveURL(/\/product-variants\/[^/]+$/);
+        await page.goto(`/product-variants/${variantId}`);
 
         // Locate the SKU field on the detail form and change only that.
         const skuField = page
@@ -1024,16 +1060,11 @@ test.describe('variant update sends only changed fields (OSS-567)', () => {
         const input = request.postDataJSON()?.variables?.input;
 
         // Only the non-nullable id and the changed sku should be present — every other
-        // replace-semantics field (facetValueIds, assetIds, trackInventory, translations,
-        // price, …) must be omitted.
+        // replace-semantics field (facetValueIds, assetIds, translations, price, …) is omitted.
+        // The exhaustive key assertion below already proves each of those is absent.
         expect(input).toBeTruthy();
         expect(Object.keys(input).sort()).toEqual(['id', 'sku']);
         expect(input.sku).toBe(newSku);
-        expect(input.facetValueIds).toBeUndefined();
-        expect(input.assetIds).toBeUndefined();
-        expect(input.trackInventory).toBeUndefined();
-        expect(input.translations).toBeUndefined();
-        expect(input.price).toBeUndefined();
 
         // Confirm the save succeeded.
         await expect(
@@ -1042,5 +1073,14 @@ test.describe('variant update sends only changed fields (OSS-567)', () => {
                 .filter({ hasText: /updated/i })
                 .first(),
         ).toBeVisible({ timeout: 10_000 });
+    });
+
+    test.afterAll(async ({ browser }) => {
+        if (!productId) return;
+        const page = await browser.newPage();
+        const client = new VendureAdminClient(page);
+        await client.login();
+        await client.gql(`mutation ($id: ID!) { deleteProduct(id: $id) { result } }`, { id: productId });
+        await page.close();
     });
 });
