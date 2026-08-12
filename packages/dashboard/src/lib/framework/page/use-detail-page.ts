@@ -30,6 +30,7 @@ import {
     useGeneratedForm,
     WithLooseCustomFields,
 } from '../form-engine/use-generated-form.js';
+import { pruneToChangedFields } from '../form-engine/utils.js';
 
 import { DetailEntityPath } from './page-types.js';
 
@@ -377,13 +378,11 @@ export function useDetailPage<
                 // fields, which `changedFields` always includes), so an untouched
                 // field's stale value cannot overwrite a concurrent edit. Opt out
                 // via `sendAllFieldsOnUpdate`.
-                const changedFields = meta?.changedFields;
-                const prunedValues =
-                    !sendAllFieldsOnUpdate && changedFields
-                        ? Object.fromEntries(
-                              Object.entries(filteredValues).filter(([key]) => changedFields.has(key)),
-                          )
-                        : filteredValues;
+                const prunedValues = pruneToChangedFields(
+                    filteredValues,
+                    meta?.changedFields,
+                    sendAllFieldsOnUpdate,
+                );
                 const finalInput = transformUpdateInput?.(prunedValues) ?? prunedValues;
                 updateMutation.mutate({ input: finalInput });
             }

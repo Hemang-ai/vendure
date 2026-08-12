@@ -23,8 +23,10 @@ import {
 /**
  * @description
  * Metadata passed as the second argument to a {@link GeneratedFormOptions} `onSubmit`
- * handler, describing the outcome of the form submission.
+ * handler, describing which fields the user changed relative to the loaded entity.
  *
+ * @docsCategory detail-views
+ * @docsPage useGeneratedForm
  * @since 3.8.0
  */
 export interface GeneratedFormSubmitMeta {

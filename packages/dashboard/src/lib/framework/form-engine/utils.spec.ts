@@ -12,6 +12,7 @@ import {
     getChangedTopLevelFields,
     isFieldNullable,
     isRedactedSecretValue,
+    pruneToChangedFields,
     removeEmptyIdFields,
     resolveInputComponentId,
     stripNullNullableFields,
@@ -1143,5 +1144,25 @@ describe('getChangedTopLevelFields', () => {
         // the caller only keeps keys that actually exist in the payload.
         expect(changed.has('id')).toBe(true);
         expect(changed.has('sku')).toBe(false);
+    });
+});
+
+describe('pruneToChangedFields', () => {
+    it('keeps only the changed fields', () => {
+        const pruned = pruneToChangedFields(
+            { id: '1', name: 'new', facetValueIds: ['1'], enabled: true },
+            new Set(['id', 'name']),
+        );
+        expect(pruned).toEqual({ id: '1', name: 'new' });
+    });
+
+    it('returns the full payload when sendAll is true (escape hatch)', () => {
+        const values = { id: '1', name: 'new', facetValueIds: ['1'], enabled: true };
+        expect(pruneToChangedFields(values, new Set(['id', 'name']), true)).toEqual(values);
+    });
+
+    it('returns the full payload when there is no change set', () => {
+        const values = { id: '1', name: 'new' };
+        expect(pruneToChangedFields(values, undefined)).toEqual(values);
     });
 });

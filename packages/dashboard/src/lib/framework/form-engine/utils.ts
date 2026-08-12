@@ -348,7 +348,10 @@ export function deepEqual(a: unknown, b: unknown): boolean {
  *
  * Comparison must be done on the raw (pre-processed) form values so that
  * transformations applied before submission (id-stripping, empty-string→null)
- * do not register as spurious changes.
+ * do not register as spurious changes. This makes it an invariant that those
+ * pre-submission transforms must never rename or add a top-level key: the
+ * returned set is matched against the processed payload, so a renamed key
+ * would be silently dropped from the update instead of raising an error.
  */
 export function getChangedTopLevelFields(
     submitted: Record<string, any>,
@@ -368,6 +371,24 @@ export function getChangedTopLevelFields(
         }
     }
     return changed;
+}
+
+/**
+ * @description
+ * Narrows an update payload down to the top-level fields the user actually changed, as computed by
+ * {@link getChangedTopLevelFields}. When `sendAll` is `true`, or when no change set is available,
+ * the payload is returned unchanged — this is the escape hatch for update mutations that rely on
+ * receiving every field (exposed on the detail page as `sendAllFieldsOnUpdate`).
+ */
+export function pruneToChangedFields<T extends Record<string, any>>(
+    values: T,
+    changedFields: ReadonlySet<string> | undefined,
+    sendAll = false,
+): T {
+    if (sendAll || !changedFields) {
+        return values;
+    }
+    return Object.fromEntries(Object.entries(values).filter(([key]) => changedFields.has(key))) as T;
 }
 
 // =============================================================================
