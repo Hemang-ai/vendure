@@ -6,11 +6,14 @@ import { RequestContext } from '../../api/common/request-context';
 import { Instrument } from '../../common/instrument-decorator';
 import { AvailableStock } from '../../config/catalog/stock-location-strategy';
 import { ConfigService } from '../../config/config.service';
+import { Logger } from '../../config/logger/vendure-logger';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { ProductVariant } from '../../entity/product-variant/product-variant.entity';
 import { StockLevel } from '../../entity/stock-level/stock-level.entity';
 
 import { StockLocationService } from './stock-location.service';
+
+const loggerCtx = 'StockLevelService';
 
 /**
  * @description
@@ -84,7 +87,9 @@ export class StockLevelService {
      * @description
      * Updates the `stockOnHand` for the given {@link ProductVariant} and {@link StockLocation}.
      * The write is atomic: the row is locked before reading to prevent lost updates under concurrency.
-     * When creating a new StockLevel the initial value is clamped at 0 so the row is never born negative.
+     * When creating a new StockLevel the initial value is the adjustment delta itself — which may be
+     * negative (e.g. a backorder against a variant with a negative `outOfStockThreshold`) — so the
+     * row stays consistent with the `StockAdjustment` ledger rather than silently diverging from it.
      */
     async updateStockOnHandForLocation(
         ctx: RequestContext,
@@ -124,7 +129,7 @@ export class StockLevelService {
                     new StockLevel({
                         productVariantId,
                         stockLocationId,
-                        stockOnHand: Math.max(0, change),
+                        stockOnHand: change,
                         stockAllocated: 0,
                     }),
                 );
@@ -138,7 +143,9 @@ export class StockLevelService {
      * @description
      * Updates the `stockAllocated` for the given {@link ProductVariant} and {@link StockLocation}.
      * The write is atomic: the row is locked before reading to prevent lost updates under concurrency.
-     * `stockAllocated` is clamped at 0 so a release can never produce a negative value.
+     * `stockAllocated` is clamped at 0 so a release can never produce a negative value; a clamp that
+     * actually fires is logged, since it means more was released than was ever allocated (an
+     * accounting bug that must not be hidden behind a silent clamp).
      */
     async updateStockAllocatedForLocation(
         ctx: RequestContext,
@@ -167,8 +174,17 @@ export class StockLevelService {
                 stockLevel = await repo.findOne({ where: { productVariantId, stockLocationId } });
             }
             if (stockLevel) {
+                const nextStockAllocated = stockLevel.stockAllocated + change;
+                if (nextStockAllocated < 0) {
+                    Logger.warn(
+                        `stockAllocated for ProductVariant ${productVariantId} at StockLocation ` +
+                            `${stockLocationId} would go negative (${stockLevel.stockAllocated} + ` +
+                            `${change}); clamping to 0`,
+                        loggerCtx,
+                    );
+                }
                 await repo.update(stockLevel.id, {
-                    stockAllocated: Math.max(0, stockLevel.stockAllocated + change),
+                    stockAllocated: Math.max(0, nextStockAllocated),
                 });
             }
         });
