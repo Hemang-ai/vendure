@@ -11,6 +11,7 @@ import { In } from 'typeorm';
 import { RequestContext } from '../../api/common/request-context';
 import { Instrument } from '../../common/instrument-decorator';
 import { idsAreEqual } from '../../common/utils';
+import { Logger } from '../../config/logger/vendure-logger';
 import { ShippingCalculator } from '../../config/shipping-method/shipping-calculator';
 import { ShippingEligibilityChecker } from '../../config/shipping-method/shipping-eligibility-checker';
 import { TransactionalConnection } from '../../connection/transactional-connection';
@@ -32,6 +33,8 @@ import { ListQueryBuilder } from '../helpers/list-query-builder/list-query-build
 import { GlobalSettingsService } from './global-settings.service';
 import { StockLevelService } from './stock-level.service';
 import { StockLocationService } from './stock-location.service';
+
+const loggerCtx = 'StockMovementService';
 
 /**
  * @description
@@ -243,6 +246,17 @@ export class StockMovementService {
                 await this.eventBus.publish(new StockMovementEvent(txCtx, savedAllocations));
             }
             for (const { order, shortfalls } of shortfallsByOrder.values()) {
+                // Surface the shortfall in the logs: allocation is capped rather than failed (the
+                // payment may already be captured), so without this a paid-but-under-allocated Order
+                // looks normal in the admin UI. The StockShortfallEvent lets a plugin react further.
+                for (const shortfall of shortfalls) {
+                    Logger.warn(
+                        `Stock shortfall on Order ${order.code}: ProductVariant ` +
+                            `${shortfall.productVariantId} requested ${shortfall.requested}, ` +
+                            `allocated ${shortfall.allocated}`,
+                        loggerCtx,
+                    );
+                }
                 await this.eventBus.publish(new StockShortfallEvent(txCtx, order, shortfalls));
             }
             return savedAllocations;
