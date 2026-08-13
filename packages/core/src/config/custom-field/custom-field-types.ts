@@ -28,6 +28,7 @@ import {
     Type,
     UiComponentConfig,
 } from '@vendure/common/lib/shared-types';
+import { RelationOptions } from 'typeorm';
 
 import { RequestContext } from '../../api/common/request-context';
 import { Injector } from '../../common/injector';
@@ -171,8 +172,34 @@ export type RelationCustomFieldConfig = TypedCustomFieldConfig<
 > & {
     entity: Type<VendureEntity>;
     graphQLType?: string;
-    eager?: boolean;
     inverseSide?: string | ((object: any) => any);
+    /**
+     * @description
+     * The TypeORM [cascade options](https://typeorm.io/docs/relations/relations#cascade-options) for the relation.
+     * Cascaded operations act on the related entity when the owning entity is saved or removed.
+     *
+     * @since 3.7.0
+     */
+    cascade?: RelationOptions['cascade'];
+    /**
+     * @description
+     * The foreign key `ON DELETE` action for the relation. If not set, the database default (`NO ACTION`) applies.
+     *
+     * @since 3.7.0
+     */
+    onDelete?: RelationOptions['onDelete'];
+    /**
+     * @description
+     * The foreign key `ON UPDATE` action for the relation. If not set, the database default (`NO ACTION`) applies.
+     *
+     * @since 3.7.0
+     */
+    onUpdate?: RelationOptions['onUpdate'];
+    /**
+     * @description
+     * Whether the relation is always loaded together with the owning entity.
+     */
+    eager?: RelationOptions['eager'];
 };
 
 // Struct field definitions
