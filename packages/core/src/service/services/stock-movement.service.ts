@@ -338,7 +338,7 @@ export class StockMovementService {
             where: {
                 id: In(lineInputs.map(l => l.orderLineId)),
             },
-            relations: ['productVariant'],
+            relations: { productVariant: true },
         });
 
         const cancellations: Cancellation[] = [];
@@ -389,7 +389,7 @@ export class StockMovementService {
         const releases: Release[] = [];
         const orderLines = await this.connection.getRepository(ctx, OrderLine).find({
             where: { id: In(lineInputs.map(l => l.orderLineId)) },
-            relations: ['productVariant'],
+            relations: { productVariant: true },
         });
         const globalTrackInventory = (await this.globalSettingsService.getSettings(ctx)).trackInventory;
         const variantsMap = new Map<ID, ProductVariant>();

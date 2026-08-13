@@ -81,6 +81,7 @@ import { ListQueryOptions } from '../../common/types/common-types';
 import { assertFound, idsAreEqual } from '../../common/utils';
 import { ConfigService } from '../../config/config.service';
 import { Logger } from '../../config/logger/vendure-logger';
+import { findOptionsArrayToObject } from '../../connection/find-options-array-to-object';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Channel } from '../../entity/channel/channel.entity';
 import { Customer } from '../../entity/customer/customer.entity';
@@ -285,7 +286,7 @@ export class OrderService implements OnApplicationBootstrap {
             .map(r => r.replace('lines.', ''));
 
         qb.setFindOptions({
-            relations: orderRelations,
+            relations: findOptionsArrayToObject<Order>(orderRelations),
             relationLoadStrategy: 'query',
         })
             .leftJoin('order.channels', 'channel')
@@ -303,7 +304,7 @@ export class OrderService implements OnApplicationBootstrap {
                 const linesQb = this.connection.getRepository(ctx, OrderLine).createQueryBuilder('line');
                 linesQb
                     .setFindOptions({
-                        relations: lineRelations,
+                        relations: findOptionsArrayToObject<OrderLine>(lineRelations),
                     })
                     .where('line.orderId = :orderId', { orderId })
                     .addOrderBy('line.createdAt', 'ASC')
@@ -335,7 +336,7 @@ export class OrderService implements OnApplicationBootstrap {
         relations?: RelationPaths<Order>,
     ): Promise<Order | undefined> {
         const order = await this.connection.getRepository(ctx, Order).findOne({
-            relations: ['customer'],
+            relations: { customer: true },
             where: {
                 code: orderCode,
             },
@@ -386,7 +387,7 @@ export class OrderService implements OnApplicationBootstrap {
      */
     getOrderPayments(ctx: RequestContext, orderId: ID): Promise<Payment[]> {
         return this.connection.getRepository(ctx, Payment).find({
-            relations: ['refunds'],
+            relations: { refunds: true },
             where: {
                 order: { id: orderId } as any,
             },
@@ -402,7 +403,7 @@ export class OrderService implements OnApplicationBootstrap {
             where: {
                 order: { id: orderId },
             },
-            relations: ['lines', 'payment', 'refund', 'surcharges'],
+            relations: { lines: true, payment: true, refund: true, surcharges: true },
         });
     }
 
@@ -423,7 +424,7 @@ export class OrderService implements OnApplicationBootstrap {
             where: {
                 aggregateOrderId: order.id,
             },
-            relations: ['channels'],
+            relations: { channels: true },
         });
     }
 
@@ -432,7 +433,10 @@ export class OrderService implements OnApplicationBootstrap {
             ? undefined
             : this.connection
                   .getRepository(ctx, Order)
-                  .findOne({ where: { id: order.aggregateOrderId }, relations: ['channels', 'lines'] })
+                  .findOne({
+                      where: { id: order.aggregateOrderId },
+                      relations: { channels: true, lines: true },
+                  })
                   .then(result => result ?? undefined);
     }
 
@@ -1855,7 +1859,7 @@ export class OrderService implements OnApplicationBootstrap {
             where: {
                 id: In(input.lines.map(l => l.orderLineId)),
             },
-            relations: ['productVariant'],
+            relations: { productVariant: true },
         });
 
         for (const line of lines) {
@@ -2108,9 +2112,10 @@ export class OrderService implements OnApplicationBootstrap {
         const orderToDelete =
             orderOrId instanceof Order
                 ? orderOrId
-                : await this.connection
-                      .getRepository(ctx, Order)
-                      .findOneOrFail({ where: { id: orderOrId }, relations: ['lines', 'shippingLines'] });
+                : await this.connection.getRepository(ctx, Order).findOneOrFail({
+                      where: { id: orderOrId },
+                      relations: { lines: true, shippingLines: true },
+                  });
         // If there is a Session referencing the Order to be deleted, we must first remove that
         // reference in order to avoid a foreign key error. See https://github.com/vendurehq/vendure/issues/1454
         const sessions = await this.connection
@@ -2576,13 +2581,11 @@ export class OrderService implements OnApplicationBootstrap {
 
             const orders = await this.connection.getRepository(orderCtx, Order).find({
                 where: { id: In(affectedOrders.map(o => o.id)) },
-                relations: [
-                    'lines',
-                    'lines.productVariant',
-                    'lines.productVariant.productVariantPrices',
-                    'shippingLines',
-                    'surcharges',
-                ],
+                relations: {
+                    lines: { productVariant: { productVariantPrices: true } },
+                    shippingLines: true,
+                    surcharges: true,
+                },
             });
 
             for (const order of orders) {

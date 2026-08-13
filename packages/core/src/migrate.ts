@@ -3,13 +3,14 @@ import { randomBytes } from 'crypto';
 import fs from 'fs-extra';
 import path from 'path';
 import pc from 'picocolors';
-import { Connection, createConnection, DataSourceOptions } from 'typeorm';
+import { DataSource, DataSourceOptions } from 'typeorm';
 import { MysqlDriver } from 'typeorm/driver/mysql/MysqlDriver';
 import { camelCase } from 'typeorm/util/StringUtils';
 
 import { preBootstrapConfig } from './bootstrap';
 import { resetConfig } from './config/config-helpers';
 import { VendureConfig } from './config/vendure-config';
+import { getDatabaseType } from './connection/database-type';
 
 /**
  * @description
@@ -56,7 +57,7 @@ export interface MigrationOptions {
  */
 export async function runMigrations(userConfig: Partial<VendureConfig>): Promise<string[]> {
     const config = await preBootstrapConfig(userConfig);
-    const connection = await createConnection(createConnectionOptions(config));
+    const connection = await createDataSource(createDataSourceOptions(config));
     const migrationsRan: string[] = [];
     try {
         const migrations = await disableForeignKeysForSqLite(connection, () =>
@@ -76,13 +77,13 @@ export async function runMigrations(userConfig: Partial<VendureConfig>): Promise
         }
     } finally {
         await checkMigrationStatus(connection);
-        await connection.close();
+        await connection.destroy();
         resetConfig();
     }
     return migrationsRan;
 }
 
-async function checkMigrationStatus(connection: Connection) {
+async function checkMigrationStatus(connection: DataSource) {
     const builderLog = await connection.driver.createSchemaBuilder().log();
     if (builderLog.upQueries.length) {
         log(
@@ -105,7 +106,7 @@ async function checkMigrationStatus(connection: Connection) {
  */
 export async function revertLastMigration(userConfig: Partial<VendureConfig>) {
     const config = await preBootstrapConfig(userConfig);
-    const connection = await createConnection(createConnectionOptions(config));
+    const connection = await createDataSource(createDataSourceOptions(config));
     try {
         await disableForeignKeysForSqLite(connection, () =>
             connection.undoLastMigration({ transaction: 'each' }),
@@ -119,7 +120,7 @@ export async function revertLastMigration(userConfig: Partial<VendureConfig>) {
             process.exitCode = 1;
         }
     } finally {
-        await connection.close();
+        await connection.destroy();
         resetConfig();
     }
 }
@@ -139,7 +140,7 @@ export async function generateMigration(
     const config = await preBootstrapConfig(userConfig);
     const { connection, cleanup } = options.fromEmpty
         ? await createEmptyDatabaseConnection(config)
-        : { connection: await createConnection(createConnectionOptions(config)), cleanup: undefined };
+        : { connection: await createDataSource(createDataSourceOptions(config)), cleanup: undefined };
 
     let migrationName: string | undefined;
     try {
@@ -173,11 +174,11 @@ export async function generateMigration(
             log(pc.yellow('No changes in database schema were found - cannot generate a migration.'));
         }
     } finally {
-        // Nested so that a failing connection.close() still drops the shadow database (cleanup)
+        // Nested so that a failing connection.destroy() still drops the shadow database (cleanup)
         // and resets the config, rather than orphaning the shadow DB and leaking the admin
         // connection.
         try {
-            await connection.close();
+            await connection.destroy();
         } finally {
             if (cleanup) {
                 await cleanup();
@@ -188,7 +189,7 @@ export async function generateMigration(
     return migrationName;
 }
 
-function createConnectionOptions(userConfig: Partial<VendureConfig>): DataSourceOptions {
+function createDataSourceOptions(userConfig: Partial<VendureConfig>): DataSourceOptions {
     return Object.assign({ logging: ['query', 'error', 'schema'] }, userConfig.dbConnectionOptions, {
         subscribers: [],
         synchronize: false,
@@ -198,11 +199,15 @@ function createConnectionOptions(userConfig: Partial<VendureConfig>): DataSource
     });
 }
 
+function createDataSource(options: DataSourceOptions): Promise<DataSource> {
+    return new DataSource(options).initialize();
+}
+
 interface EmptyDatabaseConnection {
-    connection: Connection;
+    connection: DataSource;
     /**
      * Tears down any temporary database that was provisioned. Must be called *after* the
-     * {@link connection} has been closed.
+     * {@link connection} has been destroyed.
      */
     cleanup?: () => Promise<void>;
 }
@@ -219,8 +224,8 @@ interface EmptyDatabaseConnection {
 async function createEmptyDatabaseConnection(
     config: Partial<VendureConfig>,
 ): Promise<EmptyDatabaseConnection> {
-    const baseOptions = createConnectionOptions(config);
-    switch (baseOptions.type) {
+    const baseOptions = createDataSourceOptions(config);
+    switch (getDatabaseType(baseOptions)) {
         // aurora-postgres/aurora-mysql are intentionally excluded: they connect over the Aurora
         // Data API, where `CREATE DATABASE` is not supported the same way, and this has not been
         // verified - so they fall through to the clear "unsupported" error below.
@@ -232,7 +237,7 @@ async function createEmptyDatabaseConnection(
         case 'better-sqlite3':
         case 'sqlite':
         case 'sqljs':
-            return { connection: await createConnection(emptySqliteOptions(baseOptions)) };
+            return { connection: await createDataSource(emptySqliteOptions(baseOptions)) };
         default:
             throw new Error(
                 `Generating a migration from an empty database is not supported for the "${baseOptions.type}" ` +
@@ -294,9 +299,8 @@ async function provisionShadowDatabase(
 
     // An admin connection to the *configured* database, used only to create and later drop the
     // temporary shadow database.
-    const admin = await createConnection({
+    const admin = await createDataSource({
         ...master,
-        name: `vendure-shadow-admin-${shadowName}`,
         entities: [],
         migrations: [],
         logging: false,
@@ -314,27 +318,24 @@ async function provisionShadowDatabase(
     try {
         await admin.query(`CREATE DATABASE ${quotedName}${charsetClause}`);
     } catch (e: any) {
-        await admin.close();
+        await admin.destroy();
         throw new Error(
             `Could not create the temporary shadow database ${shadowName}. Ensure the configured database ` +
                 `user has permission to create databases. Original error: ${e.message as string}`,
         );
     }
 
-    let connection: Connection;
+    let connection: DataSource;
     try {
         // `withDatabase` retargets the shadow connection at shadowName, accounting for a database
         // embedded in a connection `url` (which would otherwise override the top-level `database`
         // and point the shadow connection back at the real configured database).
-        connection = await createConnection({
-            ...withDatabase(master, shadowName),
-            name: `vendure-shadow-${shadowName}`,
-        } as DataSourceOptions);
+        connection = await createDataSource(withDatabase(master, shadowName));
     } catch (e) {
         // The shadow database was created but we could not connect to it - drop it so it is not
         // left behind, then surface the original error.
         await admin.query(`DROP DATABASE IF EXISTS ${quotedName}`).catch(() => undefined);
-        await admin.close();
+        await admin.destroy();
         throw e;
     }
 
@@ -352,30 +353,26 @@ async function provisionShadowDatabase(
                 }
                 await admin.query(`DROP DATABASE IF EXISTS ${quotedName}`);
             } finally {
-                await admin.close();
+                await admin.destroy();
             }
         },
     };
 }
 
 function emptySqliteOptions(baseOptions: DataSourceOptions): DataSourceOptions {
-    const shared = {
-        ...baseOptions,
-        name: `vendure-shadow-${uniqueShadowSuffix()}`,
-    };
     if (baseOptions.type === 'sqljs') {
         // For sqljs the database can be a Uint8Array of saved bytes; unset it (and the save
         // callback/location) so the shadow really is an empty in-memory database, not a restored
         // copy of a populated one.
         return {
-            ...shared,
+            ...baseOptions,
             location: undefined,
             database: undefined,
             autoSave: false,
             autoSaveCallback: undefined,
         } as unknown as DataSourceOptions;
     }
-    return { ...shared, database: ':memory:' } as DataSourceOptions;
+    return { ...baseOptions, database: ':memory:' } as DataSourceOptions;
 }
 
 /**
@@ -383,8 +380,9 @@ function emptySqliteOptions(baseOptions: DataSourceOptions): DataSourceOptions {
  * is a work-around for the issue.
  * See https://github.com/typeorm/typeorm/issues/2576#issuecomment-499506647
  */
-async function disableForeignKeysForSqLite<T>(connection: Connection, work: () => Promise<T>): Promise<T> {
-    const isSqLite = connection.options.type === 'sqlite' || connection.options.type === 'better-sqlite3';
+async function disableForeignKeysForSqLite<T>(connection: DataSource, work: () => Promise<T>): Promise<T> {
+    const dbType = getDatabaseType(connection);
+    const isSqLite = dbType === 'sqlite' || dbType === 'better-sqlite3';
     if (isSqLite) {
         await connection.query('PRAGMA foreign_keys=OFF');
     }
