@@ -24,6 +24,8 @@ import { getDatabaseType, VendureDatabaseType } from '../connection/database-typ
 import { EntityId } from './entity-id.decorator';
 import { EncryptedFieldTransformer } from './value-transformers';
 
+import { coreEntitiesMap } from './entities';
+
 /**
  * The maximum length of the "length" argument of a MySQL varchar column.
  */
@@ -134,14 +136,51 @@ function registerCustomFieldsForEntity(
             const instance = new ctor();
             const registerColumn = () => {
                 if (customField.type === 'relation') {
+                    const { cascade, onDelete, onUpdate, eager } = customField;
+                    const relatedEntityName = customField.entity.name;
+
+                    if (onDelete === 'CASCADE' && relatedEntityName in coreEntitiesMap && list !== true) {
+                        Logger.warn(
+                            [
+                                `WARNING: You have set "onDelete: 'CASCADE'" on the custom field relation "${String(entityName)}.${name}" to the "${relatedEntityName}" entity.`,
+                                `Deleting "${relatedEntityName}" rows will also delete the "${String(entityName)}" rows that reference them.`,
+                                `"${relatedEntityName}" is a core Vendure entity, so make sure this is what you intend.`,
+                            ].join('\n'),
+                        );
+                    }
+                    if (
+                        (cascade === true ||
+                            (Array.isArray(cascade) &&
+                                (cascade.includes('remove') || cascade.includes('soft-remove')))) &&
+                        relatedEntityName in coreEntitiesMap &&
+                        list !== true
+                    ) {
+                        const cascadeSetting =
+                            cascade === true
+                                ? `cascade: true (which includes 'remove' and 'soft-remove')`
+                                : `cascade: ${JSON.stringify(cascade)}`;
+                        Logger.warn(
+                            [
+                                `WARNING: You have set "${cascadeSetting}" on the custom field relation "${String(entityName)}.${name}" to the "${relatedEntityName}" entity.`,
+                                `Removing "${String(entityName)}" rows with TypeORM's remove() or softRemove() will also remove the "${relatedEntityName}" rows they reference.`,
+                                `"${relatedEntityName}" is a core Vendure entity, so make sure this is what you intend.`,
+                            ].join('\n'),
+                        );
+                    }
                     if (customField.list) {
                         ManyToMany(type => customField.entity, customField.inverseSide, {
-                            eager: customField.eager,
+                            cascade,
+                            onDelete,
+                            onUpdate,
+                            eager,
                         })(instance, name);
                         JoinTable()(instance, name);
                     } else {
                         ManyToOne(type => customField.entity, customField.inverseSide, {
-                            eager: customField.eager,
+                            cascade,
+                            onDelete,
+                            onUpdate,
+                            eager,
                         })(instance, name);
                         JoinColumn()(instance, name);
                         // Expose the foreign key as an id property (e.g. "ownerId"), which maps
