@@ -141,7 +141,7 @@ export interface DetailPageOptions<
      * By default, update mutations only send the fields the user actually changed,
      * so that an untouched field's stale page-load value cannot silently overwrite
      * a concurrent change made by another admin or via the API. Set this to `true`
-     * to restore the previous behaviour of always sending the full form payload on
+     * to always send the full form payload on
      * update (e.g. if a custom update mutation relies on receiving unchanged fields).
      *
      * @default false
