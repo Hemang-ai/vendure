@@ -272,6 +272,28 @@ export function useGeneratedForm<
                         ? getChangedTopLevelFields(rawValues, values, updateFields)
                         : undefined,
                 };
+                // Dev-time guard for the invariant `changedFields` depends on: it is computed on the
+                // raw values, but a consumer applies it to `processed` (after the transforms above).
+                // That only stays correct while none of those transforms renames or drops a top-level
+                // key the user changed — otherwise the change would be silently omitted from the
+                // update. Empty-string IDs are the one legitimate removal (`removeEmptyIdFields`), so
+                // they are excluded. This fires only in dev/test builds; production is unaffected.
+                if (import.meta.env.DEV && meta.changedFields) {
+                    for (const key of meta.changedFields) {
+                        if (
+                            Object.prototype.hasOwnProperty.call(rawValues, key) &&
+                            rawValues[key] !== '' &&
+                            !Object.prototype.hasOwnProperty.call(processed, key)
+                        ) {
+                            throw new Error(
+                                `Form-engine invariant violated: the changed top-level field "${key}" ` +
+                                    `was removed by a pre-submission transform. Those transforms must not ` +
+                                    `rename or drop a changed key, or a consumer pruning to the changed-` +
+                                    `field set would silently omit it from the update payload.`,
+                            );
+                        }
+                    }
+                }
                 onSubmit(processed, meta);
             };
             form.handleSubmit(onSubmitWrapper)(event);
