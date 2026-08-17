@@ -25,20 +25,27 @@ interface PromptAnswers {
 }
 
 async function selectStorefront(): Promise<StorefrontId | undefined> {
-    const selected = await select({
+    const options: Array<{
+        label: string;
+        value: StorefrontId | 'none';
+        hint?: string;
+    }> = [
+        { label: 'None', value: 'none' },
+        ...STOREFRONT_STARTERS.map(storefront => ({
+            label: storefront.name,
+            value: storefront.id,
+            hint: storefront.description,
+        })),
+    ];
+    const selected = await select<typeof options, StorefrontId | 'none'>({
         message: 'Would you like to include a storefront?',
-        options: [
-            { label: 'None', value: 'none' },
-            ...STOREFRONT_STARTERS.map(storefront => ({
-                label: storefront.name,
-                value: storefront.id,
-                hint: storefront.description,
-            })),
-        ],
-        initialValue: 'none' as const,
+        options,
+        initialValue: 'none',
     });
-    checkCancel(selected);
-    return selected === 'none' ? undefined : (selected as StorefrontId);
+    if (!checkCancel(selected)) {
+        return undefined;
+    }
+    return selected === 'none' ? undefined : selected;
 }
 
 /* eslint-disable no-console */
