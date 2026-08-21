@@ -1198,7 +1198,7 @@
                   "title": "Bootstrap",
                   "slug": "bootstrap",
                   "file": "docs/reference/typescript-api/common/bootstrap.mdx",
-                  "lastModified": "2026-08-21T05:35:30Z"
+                  "lastModified": "2026-08-21T07:56:41+02:00"
                 },
                 {
                   "title": "CurrencyCode",
@@ -2724,7 +2724,7 @@
                   "title": "Plugin Utilities",
                   "slug": "plugin-utilities",
                   "file": "docs/reference/typescript-api/plugin/plugin-utilities.mdx",
-                  "lastModified": "2026-08-21T05:35:30Z"
+                  "lastModified": "2026-08-21T07:56:41+02:00"
                 },
                 {
                   "title": "PluginCommonModule",
@@ -2736,13 +2736,13 @@
                   "title": "VendurePlugin",
                   "slug": "vendure-plugin",
                   "file": "docs/reference/typescript-api/plugin/vendure-plugin.mdx",
-                  "lastModified": "2026-08-21T05:35:30Z"
+                  "lastModified": "2026-08-21T07:56:41+02:00"
                 },
                 {
                   "title": "VendurePluginMetadata",
                   "slug": "vendure-plugin-metadata",
                   "file": "docs/reference/typescript-api/plugin/vendure-plugin-metadata.mdx",
-                  "lastModified": "2026-08-21T05:35:30Z"
+                  "lastModified": "2026-08-21T07:56:41+02:00"
                 }
               ],
               "lastModified": "2026-01-28T14:49:21+01:00"
@@ -3566,7 +3566,7 @@
                   "title": "BootstrapWorker",
                   "slug": "bootstrap-worker",
                   "file": "docs/reference/typescript-api/worker/bootstrap-worker.mdx",
-                  "lastModified": "2026-08-21T05:35:30Z"
+                  "lastModified": "2026-08-21T07:56:41+02:00"
                 },
                 {
                   "title": "VendureWorker",
