@@ -60,19 +60,83 @@ describe('console command', () => {
             consoleUrl: 'https://console.vendure.io',
             apiUrl: 'https://api.vendure.io',
         });
-        expect(resolveConsoleEndpoints({ VENDURE_CONSOLE_URL: '', VENDURE_CONSOLE_API_URL: '   ' })).toEqual({
+        expect(
+            resolveConsoleEndpoints({
+                VENDURE_CONSOLE_LINK_URL: '',
+                VENDURE_CONSOLE_LINK_API_URL: '   ',
+            }),
+        ).toEqual({
             consoleUrl: 'https://console.vendure.io',
             apiUrl: 'https://api.vendure.io',
         });
-        expect(() => resolveConsoleEndpoints({ VENDURE_CONSOLE_URL: 'http://localhost:3000' })).toThrow(
+        expect(() => resolveConsoleEndpoints({ VENDURE_CONSOLE_LINK_URL: 'http://localhost:3000' })).toThrow(
             'Set both',
         );
         expect(() =>
             resolveConsoleEndpoints({
-                VENDURE_CONSOLE_URL: 'http://localhost:3000/path',
-                VENDURE_CONSOLE_API_URL: 'http://localhost:3001',
+                VENDURE_CONSOLE_LINK_URL: 'http://localhost:3000/path',
+                VENDURE_CONSOLE_LINK_API_URL: 'http://localhost:3001',
             }),
         ).toThrow('without a path');
+        expect(() =>
+            resolveConsoleEndpoints({
+                VENDURE_CONSOLE_LINK_URL: 'http://console.example.com',
+                VENDURE_CONSOLE_LINK_API_URL: 'https://api.example.com',
+            }),
+        ).toThrow('must use HTTPS unless it is a loopback URL');
+        expect(() =>
+            resolveConsoleEndpoints({
+                VENDURE_CONSOLE_LINK_URL: 'https://console.example.com',
+                VENDURE_CONSOLE_LINK_API_URL: 'https://api.vendure.io',
+            }),
+        ).toThrow('production Console and API origins must be used together');
+        expect(() =>
+            resolveConsoleEndpoints({
+                VENDURE_CONSOLE_URL: 'https://console.example.com',
+                VENDURE_CONSOLE_API_URL: 'https://api.example.com',
+            }),
+        ).toThrow('link-specific');
+    });
+
+    it('requires explicit approval for custom remote Console endpoints in non-interactive mode', async () => {
+        const env = {
+            VENDURE_CLI_NON_INTERACTIVE: 'true',
+            VENDURE_CONSOLE_LINK_URL: 'https://console.staging.example.com',
+            VENDURE_CONSOLE_LINK_API_URL: 'https://api.staging.example.com',
+        };
+        const blockedFetch = vi.fn() as unknown as typeof fetch;
+        const blocked = testDependencies(vendureProject(), blockedFetch, { env });
+
+        expect(await consoleCommand('link', {}, blocked.dependencies)).toBe(1);
+        expect(blockedFetch).not.toHaveBeenCalled();
+        expect(blocked.messages.join('\n')).toContain('--allow-custom-console');
+
+        const allowedFetch = sequenceFetch(
+            jsonResponse(createResponse()),
+            jsonResponse({ state: 'approved', expiresAt: expiry(), manifest }),
+        );
+        const allowed = testDependencies(vendureProject(), allowedFetch, { env });
+
+        expect(await consoleCommand('link', { allowCustomConsole: true }, allowed.dependencies)).toBe(0);
+        expect(allowedFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('shows custom remote Console origins before an interactive request', async () => {
+        const fetchMock = vi.fn() as unknown as typeof fetch;
+        const prompt = vi.fn(() => Promise.resolve(false));
+        const test = testDependencies(vendureProject(), fetchMock, {
+            env: {
+                VENDURE_CONSOLE_LINK_URL: 'https://console.staging.example.com',
+                VENDURE_CONSOLE_LINK_API_URL: 'https://api.staging.example.com',
+            },
+            isNonInteractive: () => false,
+            prompt,
+        });
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(prompt).toHaveBeenCalledWith(expect.stringContaining('console.staging.example.com'));
+        expect(prompt).toHaveBeenCalledWith(expect.stringContaining('api.staging.example.com'));
     });
 
     it('completes create, pending poll, approval, and atomic manifest write', async () => {
@@ -90,6 +154,8 @@ describe('console command', () => {
         expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toContain('.vendure/*');
         expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toContain('!.vendure/project.json');
         expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(fetchMock.mock.calls[0][1]?.redirect).toBe('error');
+        expect(fetchMock.mock.calls[1][1]?.redirect).toBe('error');
         expect(fetchMock.mock.calls[1][1]?.body).toBe(JSON.stringify({ pollingSecret: POLLING_SECRET }));
         expect(test.messages.join('\n')).toContain('Updated');
         expect(test.messages.join('\n')).toContain('.gitignore');
@@ -97,12 +163,7 @@ describe('console command', () => {
 
     it('does not rewrite a gitignore that already has the Project Link rules', async () => {
         const root = vendureProject();
-        const gitignore = [
-            'node_modules',
-            '.vendure/*',
-            '!.vendure/project.json',
-            '',
-        ].join('\n');
+        const gitignore = ['node_modules', '.vendure/*', '!.vendure/project.json', ''].join('\n');
         fs.writeFileSync(path.join(root, '.gitignore'), gitignore);
         const fetchMock = sequenceFetch(
             jsonResponse(createResponse()),
@@ -368,7 +429,12 @@ describe('console command', () => {
     it('reports linked, unlinked, and malformed status without network access', async () => {
         const root = vendureProject();
         const fetchMock = vi.fn() as unknown as typeof fetch;
-        const unlinked = testDependencies(root, fetchMock);
+        const unlinked = testDependencies(root, fetchMock, {
+            env: {
+                VENDURE_CONSOLE_URL: 'https://console.example.com',
+                VENDURE_CONSOLE_API_URL: 'https://api.example.com',
+            },
+        });
         expect(await consoleCommand('status', {}, unlinked.dependencies)).toBe(0);
         expect(unlinked.messages.join('\n')).toContain('Project: Not linked');
 
@@ -450,8 +516,8 @@ function testDependencies(
             cwd: root,
             env: {
                 VENDURE_CLI_NON_INTERACTIVE: 'true',
-                VENDURE_CONSOLE_URL: 'http://localhost:3000',
-                VENDURE_CONSOLE_API_URL: 'http://localhost:3001',
+                VENDURE_CONSOLE_LINK_URL: 'http://localhost:3000',
+                VENDURE_CONSOLE_LINK_API_URL: 'http://localhost:3001',
             },
             fetch: fetchImplementation,
             isNonInteractive: () => true,

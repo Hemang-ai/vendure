@@ -23,6 +23,7 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_RETRY_DELAY_MS = 2_000;
 
 export interface ConsoleCommandOptions {
+    allowCustomConsole?: boolean;
     project?: string;
     force?: boolean;
 }
@@ -101,7 +102,11 @@ function createDefaultDependencies(): ConsoleCommandDependencies {
         openUrl: openUrlInBrowser,
         prompt: async message => {
             const result = await withInteractiveTimeout(() => confirm({ message }), {
-                examples: ['vendure console link --force', 'vendure console unlink --force'],
+                examples: [
+                    'vendure console link --allow-custom-console',
+                    'vendure console link --force',
+                    'vendure console unlink --force',
+                ],
                 helpCommands: ['vendure console --help'],
             });
             return isCancel(result) ? undefined : result;
@@ -187,17 +192,24 @@ async function runConsoleCommand(
 }
 
 export function resolveConsoleEndpoints(env: NodeJS.ProcessEnv): ConsoleEndpoints {
-    const consoleOverride = env.VENDURE_CONSOLE_URL?.trim() || undefined;
-    const apiOverride = env.VENDURE_CONSOLE_API_URL?.trim() || undefined;
-    if (Boolean(consoleOverride) !== Boolean(apiOverride)) {
+    if (env.VENDURE_CONSOLE_URL?.trim() || env.VENDURE_CONSOLE_API_URL?.trim()) {
         throw new Error(
-            'Set both VENDURE_CONSOLE_URL and VENDURE_CONSOLE_API_URL, or unset both to use production.',
+            'Use the link-specific VENDURE_CONSOLE_LINK_URL and VENDURE_CONSOLE_LINK_API_URL variables for this command.',
         );
     }
-    return {
-        consoleUrl: baseUrl(consoleOverride ?? DEFAULT_CONSOLE_URL, 'VENDURE_CONSOLE_URL'),
-        apiUrl: baseUrl(apiOverride ?? DEFAULT_CONSOLE_API_URL, 'VENDURE_CONSOLE_API_URL'),
-    };
+    const consoleOverride = env.VENDURE_CONSOLE_LINK_URL?.trim() || undefined;
+    const apiOverride = env.VENDURE_CONSOLE_LINK_API_URL?.trim() || undefined;
+    if (Boolean(consoleOverride) !== Boolean(apiOverride)) {
+        throw new Error(
+            'Set both VENDURE_CONSOLE_LINK_URL and VENDURE_CONSOLE_LINK_API_URL, or unset both to use production.',
+        );
+    }
+    const consoleUrl = baseUrl(consoleOverride ?? DEFAULT_CONSOLE_URL, 'VENDURE_CONSOLE_LINK_URL');
+    const apiUrl = baseUrl(apiOverride ?? DEFAULT_CONSOLE_API_URL, 'VENDURE_CONSOLE_LINK_API_URL');
+    if ((consoleUrl === DEFAULT_CONSOLE_URL) !== (apiUrl === DEFAULT_CONSOLE_API_URL)) {
+        throw new Error('The production Console and API origins must be used together.');
+    }
+    return { consoleUrl, apiUrl };
 }
 
 async function link(
@@ -215,6 +227,10 @@ async function link(
     }
 
     const endpoints = resolveConsoleEndpoints(dependencies.env);
+    const endpointApproval = await confirmCustomConsoleEndpoints(endpoints, options, dependencies);
+    if (endpointApproval !== 'confirmed') {
+        return endpointApproval === 'cancelled' ? 0 : 1;
+    }
     const request = await createProjectLink(endpoints, dependencies, signal);
     dependencies.reporter.info('Approve the Project link in your browser.');
     try {
@@ -231,6 +247,41 @@ async function link(
     dependencies.reporter.info(`Wrote ${manifestPath}`);
     reportProjectLinkGitignore(projectRoot, dependencies.reporter);
     return 0;
+}
+
+async function confirmCustomConsoleEndpoints(
+    endpoints: ConsoleEndpoints,
+    options: ConsoleCommandOptions,
+    dependencies: ConsoleCommandDependencies,
+): Promise<'confirmed' | 'cancelled' | 'required'> {
+    if (!usesCustomRemoteEndpoints(endpoints) || options.allowCustomConsole) {
+        return 'confirmed';
+    }
+    if (dependencies.isNonInteractive()) {
+        dependencies.reporter.error(
+            'Refusing to use custom remote Console endpoints without explicit approval in a non-interactive environment.',
+        );
+        dependencies.reporter.info(
+            'Run vendure console link --allow-custom-console to approve these endpoints.',
+        );
+        return 'required';
+    }
+    const result = await dependencies.prompt(
+        [
+            'Link through these custom Console endpoints?',
+            `Console: ${endpoints.consoleUrl}`,
+            `API: ${endpoints.apiUrl}`,
+            'The API controls the Project Link Manifest written to this repository.',
+        ].join('\n'),
+    );
+    if (result === undefined) {
+        throw new CommandInterruptedError(130);
+    }
+    if (!result) {
+        dependencies.reporter.info('No Console requests or Project Link Manifest changes were made.');
+        return 'cancelled';
+    }
+    return 'confirmed';
 }
 
 function status(projectRoot: string, reporter: ConsoleReporter): number {
@@ -476,7 +527,11 @@ async function requestJson(
 
     let response: Response;
     try {
-        response = await dependencies.fetch(url, { ...init, signal: requestController.signal });
+        response = await dependencies.fetch(url, {
+            ...init,
+            redirect: 'error',
+            signal: requestController.signal,
+        });
     } catch {
         if (signal.aborted) {
             throw new CommandInterruptedError(130);
@@ -518,7 +573,23 @@ function baseUrl(value: string, label: string): string {
     if (url.search || url.hash || (url.pathname !== '/' && url.pathname !== '')) {
         throw new Error(`${label} must contain only an origin without a path, query, or fragment.`);
     }
+    if (url.protocol === 'http:' && !isLoopbackHostname(url.hostname)) {
+        throw new Error(`${label} must use HTTPS unless it is a loopback URL.`);
+    }
     return url.origin;
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
+
+function usesCustomRemoteEndpoints(endpoints: ConsoleEndpoints): boolean {
+    if (endpoints.consoleUrl === DEFAULT_CONSOLE_URL && endpoints.apiUrl === DEFAULT_CONSOLE_API_URL) {
+        return false;
+    }
+    return ![endpoints.consoleUrl, endpoints.apiUrl].every(value =>
+        isLoopbackHostname(new URL(value).hostname),
+    );
 }
 
 function uuid(value: unknown, label: string): string {

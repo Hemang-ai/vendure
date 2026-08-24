@@ -51,8 +51,8 @@ describe('Console project-link integration', () => {
             cwd: projectRoot,
             env: {
                 VENDURE_CLI_NON_INTERACTIVE: 'true',
-                VENDURE_CONSOLE_URL: 'http://localhost:3000',
-                VENDURE_CONSOLE_API_URL: apiUrl,
+                VENDURE_CONSOLE_LINK_URL: 'http://localhost:3000',
+                VENDURE_CONSOLE_LINK_API_URL: apiUrl,
             },
             fetch: globalThis.fetch,
             isNonInteractive: () => true,

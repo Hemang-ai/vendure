@@ -408,17 +408,30 @@ un-ignore `project.json` while the parent directory is ignored.
 
 ### Console environments
 
-The command uses `https://console.vendure.io` and `https://api.vendure.io` by default. To use a local or staging
-environment, set both variables to HTTP or HTTPS origins:
+The command uses `https://console.vendure.io` and `https://api.vendure.io` by default. To use a local Console
+environment, set both link-specific variables:
 
 ```bash
-VENDURE_CONSOLE_URL=http://localhost:3000 \
-VENDURE_CONSOLE_API_URL=http://localhost:3001 \
+VENDURE_CONSOLE_LINK_URL=http://localhost:3000 \
+VENDURE_CONSOLE_LINK_API_URL=http://localhost:3001 \
 npx vendure console link
 ```
 
-The CLI rejects partial endpoint configuration. It also rejects URLs that contain credentials, paths, queries, or
-fragments.
+The variables apply only to the unauthenticated Project Link exchange. They do not configure Console authentication,
+Environment Credentials, Registry access, package downloads, or Vendure Cloud operations.
+
+The CLI rejects partial endpoint configuration and URLs that contain credentials, paths, queries, or fragments. It
+requires HTTPS except for `localhost`, `127.0.0.1`, and `::1`. The production Console and API origins must be used
+together.
+
+Before it contacts a custom remote environment, the CLI displays both origins and asks for confirmation. In a
+non-interactive environment, pass `--allow-custom-console` to confirm them explicitly:
+
+```bash
+VENDURE_CONSOLE_LINK_URL=https://console.staging.example.com \
+VENDURE_CONSOLE_LINK_API_URL=https://api.staging.example.com \
+npx vendure console link --allow-custom-console
+```
 
 ## Working in Monorepos
 
