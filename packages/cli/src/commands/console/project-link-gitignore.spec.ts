@@ -218,6 +218,21 @@ describe('Project Link gitignore', () => {
         expect(fs.readFileSync(getProjectLinkGitignorePath(project), 'utf8')).toBe(packageIgnore);
     });
 
+    it('rewrites a path-specific directory ignore so the manifest can be committed', () => {
+        const { workspace, project } = vendureMonorepo({ gitignore: 'apps/vendure/.vendure/\n' });
+
+        expect(ensureProjectLinkGitignore(project).kind).toBe('updated');
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain(
+            PROJECT_LINK_NESTED_IGNORE_CONTENTS,
+        );
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain(
+            PROJECT_LINK_NESTED_KEEP_MANIFEST,
+        );
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).not.toContain(
+            'apps/vendure/.vendure/',
+        );
+    });
+
     it('accepts path-specific repo-root rules for apps/vendure', () => {
         const original = ['apps/vendure/.vendure/*', '!apps/vendure/.vendure/project.json', ''].join('\n');
         const { workspace, project } = vendureMonorepo({ gitignore: original });

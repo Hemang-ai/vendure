@@ -20,6 +20,7 @@ const DEFAULT_CONSOLE_URL = 'https://console.vendure.io';
 const DEFAULT_CONSOLE_API_URL = 'https://api.vendure.io';
 const POLL_INTERVAL_MS = 2_000;
 const REQUEST_TIMEOUT_MS = 10_000;
+const MAX_RESPONSE_BYTES = 64 * 1024;
 const MAX_RETRY_DELAY_MS = 2_000;
 
 export interface ConsoleCommandOptions {
@@ -181,7 +182,7 @@ async function runConsoleCommand(
         return 1;
     }
 
-    const projectRoot = resolveProjectRoot(dependencies.cwd, options.project, options.force);
+    const projectRoot = resolveProjectRoot(dependencies.cwd, options.project);
     if (normalizedAction === 'status') {
         return status(projectRoot, dependencies.reporter);
     }
@@ -306,6 +307,7 @@ function status(projectRoot: string, reporter: ConsoleReporter): number {
             `Schema version: ${manifest.schemaVersion}`,
             `Protocol version: ${manifest.link.protocolVersion}`,
             `Link: ${manifest.link.id}`,
+            `Manifest: ${result.path}`,
             'Authentication: Not stored locally (browser authorization)',
         ].join('\n'),
     );
@@ -496,7 +498,7 @@ function retryDelay(attempt: number): number {
 function parsePollResult(value: unknown, expectedLinkId: string): ProjectLinkPollResult {
     const record = objectValue(value, 'Console returned a malformed Project Link polling response.');
     const state = record.state;
-    if (!['pending', 'approved', 'denied', 'expired'].includes(String(state))) {
+    if (typeof state !== 'string' || !['pending', 'approved', 'denied', 'expired'].includes(state)) {
         throw new Error('Console returned an unknown Project Link state.');
     }
     const result: ProjectLinkPollResult = {
@@ -525,14 +527,23 @@ async function requestJson(
         requestController.abort();
     }, REQUEST_TIMEOUT_MS);
 
-    let response: Response;
     try {
-        response = await dependencies.fetch(url, {
+        const response = await dependencies.fetch(url, {
             ...init,
             redirect: 'error',
             signal: requestController.signal,
         });
-    } catch {
+        if (!response.ok) {
+            throw new ConsoleRequestError(
+                `Vendure Console API request failed with HTTP ${response.status}.`,
+                isTransientHttpStatus(response.status),
+            );
+        }
+        return await readJsonBody(response, requestController.signal);
+    } catch (error) {
+        if (error instanceof ConsoleRequestError) {
+            throw error;
+        }
         if (signal.aborted) {
             throw new CommandInterruptedError(130);
         }
@@ -546,18 +557,83 @@ async function requestJson(
         clearTimeout(timeout);
         signal.removeEventListener('abort', onAbort);
     }
+}
 
-    if (!response.ok) {
-        throw new ConsoleRequestError(
-            `Vendure Console API request failed with HTTP ${response.status}.`,
-            response.status >= 500,
-        );
-    }
+function isTransientHttpStatus(status: number): boolean {
+    return status >= 500 || status === 408 || status === 429;
+}
+
+async function readJsonBody(response: Response, signal: AbortSignal): Promise<unknown> {
+    const text = await readCappedText(response, signal);
     try {
-        return await response.json();
+        return JSON.parse(text);
     } catch {
         throw new ConsoleRequestError('Vendure Console API returned malformed JSON.', false);
     }
+}
+
+async function readCappedText(response: Response, signal: AbortSignal): Promise<string> {
+    if (!response.body) {
+        const text = await abortable(response.text(), signal);
+        if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) {
+            throw new ConsoleRequestError('Vendure Console API response exceeded the maximum size.', false);
+        }
+        return text;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const chunks: string[] = [];
+    let received = 0;
+    try {
+        while (true) {
+            if (signal.aborted) {
+                throw abortError();
+            }
+            const { done, value } = await abortable(reader.read(), signal);
+            if (done) {
+                break;
+            }
+            received += value.byteLength;
+            if (received > MAX_RESPONSE_BYTES) {
+                await reader.cancel().catch(() => undefined);
+                throw new ConsoleRequestError('Vendure Console API response exceeded the maximum size.', false);
+            }
+            chunks.push(decoder.decode(value, { stream: true }));
+        }
+        chunks.push(decoder.decode());
+        return chunks.join('');
+    } finally {
+        try {
+            reader.releaseLock();
+        } catch {
+            // cancel() already released the lock
+        }
+    }
+}
+
+function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+    if (signal.aborted) {
+        return Promise.reject(abortError());
+    }
+    return new Promise((resolve, reject) => {
+        const onAbort = () => reject(abortError());
+        signal.addEventListener('abort', onAbort, { once: true });
+        promise.then(
+            value => {
+                signal.removeEventListener('abort', onAbort);
+                resolve(value);
+            },
+            error => {
+                signal.removeEventListener('abort', onAbort);
+                reject(error);
+            },
+        );
+    });
+}
+
+function abortError(): DOMException {
+    return new DOMException('The operation was aborted.', 'AbortError');
 }
 
 function baseUrl(value: string, label: string): string {

@@ -35,11 +35,7 @@ const defaultFileOperations: AtomicFileOperations = {
     unlink: fsPromises.unlink,
 };
 
-export function resolveProjectRoot(
-    cwd: string,
-    selectedProject?: string,
-    allowCrossRootManifest = false,
-): string {
+export function resolveProjectRoot(cwd: string, selectedProject?: string): string {
     const resolvedCwd = realDirectory(cwd, 'Current working directory');
     let projectRoot: string;
 
@@ -68,9 +64,7 @@ export function resolveProjectRoot(
         }
     }
 
-    if (!allowCrossRootManifest) {
-        assertNoCrossRootManifest(resolvedCwd, projectRoot);
-    }
+    assertNoCrossRootManifest(resolvedCwd, projectRoot);
     return projectRoot;
 }
 

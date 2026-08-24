@@ -101,7 +101,6 @@ describe('Project Link Manifest', () => {
         expect(() => resolveProjectRoot(workspace, selected)).toThrow(
             'A Project Link Manifest exists outside the selected Vendure project',
         );
-        expect(resolveProjectRoot(workspace, selected, true)).toBe(selected);
     });
 
     it('does not inspect manifests above the Git workspace boundary', () => {

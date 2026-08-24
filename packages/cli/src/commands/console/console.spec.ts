@@ -309,6 +309,75 @@ describe('console command', () => {
         expect(fs.existsSync(getProjectLinkManifestPath(root))).toBe(false);
     });
 
+    it('aborts a stalled response body instead of hanging', async () => {
+        const root = vendureProject();
+        const externalAbort = new AbortController();
+        const hanging = new Promise<never>(() => undefined);
+        const fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: () => hanging,
+            text: () => hanging,
+            body: {
+                getReader: () => ({
+                    read: () => hanging,
+                    cancel: () => Promise.resolve(),
+                    releaseLock: () => undefined,
+                }),
+            },
+        }) as unknown as typeof fetch;
+        const test = testDependencies(root, fetchMock, {
+            signal: externalAbort.signal,
+        });
+        const pending = consoleCommand('link', {}, test.dependencies);
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+        externalAbort.abort();
+
+        expect(await pending).toBe(130);
+        expect(fs.existsSync(getProjectLinkManifestPath(root))).toBe(false);
+    });
+
+    it('rejects an oversized Console API response', async () => {
+        const root = vendureProject();
+        const fetchMock = sequenceFetch(
+            jsonResponse({
+                ...createResponse(),
+                padding: 'x'.repeat(70_000),
+            }),
+        );
+        const test = testDependencies(root, fetchMock);
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(1);
+        expect(test.messages.join('\n')).toContain('maximum size');
+        expect(fs.existsSync(getProjectLinkManifestPath(root))).toBe(false);
+    });
+
+    it('retries HTTP 429 poll responses as transient failures', async () => {
+        const root = vendureProject();
+        const fetchMock = sequenceFetch(
+            jsonResponse(createResponse()),
+            new Response('', { status: 429 }),
+            jsonResponse({ state: 'approved', expiresAt: expiry(), manifest }),
+        );
+        const test = testDependencies(root, fetchMock);
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
+        expect(test.sleeps).toEqual([500]);
+    });
+
+    it('rejects a non-string poll state instead of treating it as pending', async () => {
+        const root = vendureProject();
+        const fetchMock = sequenceFetch(
+            jsonResponse(createResponse()),
+            jsonResponse({ state: ['approved'], expiresAt: expiry(), manifest }),
+        );
+        const test = testDependencies(root, fetchMock);
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(1);
+        expect(test.messages.join('\n')).toContain('unknown Project Link state');
+        expect(fs.existsSync(getProjectLinkManifestPath(root))).toBe(false);
+    });
+
     it('retries transient poll failures until expiry and does not retry request creation', async () => {
         const root = vendureProject();
         const fetchMock = sequenceFetch(
@@ -359,6 +428,19 @@ describe('console command', () => {
         const test = testDependencies(root, fetchMock);
 
         expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
+    });
+
+    it('does not let --force bypass a cross-root Project Link Manifest', async () => {
+        const { workspace, project } = vendureMonorepo();
+        const ancestorManifest = getProjectLinkManifestPath(workspace);
+        fs.ensureDirSync(path.dirname(ancestorManifest));
+        fs.writeJsonSync(ancestorManifest, manifest);
+        const fetchMock = vi.fn() as unknown as typeof fetch;
+        const test = testDependencies(workspace, fetchMock);
+
+        expect(await consoleCommand('link', { project, force: true }, test.dependencies)).toBe(1);
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(test.messages.join('\n')).toContain('outside the selected Vendure project');
     });
 
     it('fails closed for replacement in non-interactive mode and allows --force', async () => {
@@ -443,6 +525,7 @@ describe('console command', () => {
         const linked = testDependencies(root, fetchMock);
         expect(await consoleCommand('status', {}, linked.dependencies)).toBe(0);
         expect(linked.messages.join('\n')).toContain(`Account: Acme (${ACCOUNT_ID})`);
+        expect(linked.messages.join('\n')).toContain(`Manifest: ${getProjectLinkManifestPath(root)}`);
         expect(linked.messages.join('\n')).toContain('Authentication: Not stored locally');
 
         fs.writeFileSync(getProjectLinkManifestPath(root), '{invalid');

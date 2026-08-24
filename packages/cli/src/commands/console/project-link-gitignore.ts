@@ -358,7 +358,7 @@ function isDirectoryIgnore(pattern: string): boolean {
     if (pattern.startsWith('!')) {
         return false;
     }
-    return /^(?:\*\*\/)?\.vendure\/?$/.test(stripRootAnchor(pattern));
+    return /(?:^|\/)(?:\*\*\/)?\.vendure\/?$/.test(stripRootAnchor(pattern));
 }
 
 function stripRootAnchor(pattern: string): string {
