@@ -507,8 +507,8 @@ function exactObject(value: unknown, keys: string[], label: string): Record<stri
         throw new Error(`Console returned a malformed ${label}.`);
     }
     const object = value as Record<string, unknown>;
-    const actualKeys = Object.keys(object).sort();
-    const expectedKeys = [...keys].sort();
+    const actualKeys = Object.keys(object).sort((a, b) => a.localeCompare(b));
+    const expectedKeys = [...keys].sort((a, b) => a.localeCompare(b));
     if (
         actualKeys.length !== expectedKeys.length ||
         actualKeys.some((key, index) => key !== expectedKeys[index])

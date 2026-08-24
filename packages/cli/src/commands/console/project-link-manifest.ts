@@ -200,7 +200,7 @@ function findWorkspaceVendureProjects(root: string): string[] {
             }
         }
     }
-    return [...candidates].sort();
+    return [...candidates].sort((a, b) => a.localeCompare(b));
 }
 
 function assertNoCrossRootManifest(cwd: string, projectRoot: string): void {
@@ -277,8 +277,8 @@ function exactObject(value: unknown, keys: string[], label: string): Record<stri
         throw new Error(`The ${label} must be an object.`);
     }
     const object = value as Record<string, unknown>;
-    const actualKeys = Object.keys(object).sort();
-    const expectedKeys = [...keys].sort();
+    const actualKeys = Object.keys(object).sort((a, b) => a.localeCompare(b));
+    const expectedKeys = [...keys].sort((a, b) => a.localeCompare(b));
     if (
         actualKeys.length !== expectedKeys.length ||
         actualKeys.some((key, index) => key !== expectedKeys[index])
