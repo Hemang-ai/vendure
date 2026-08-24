@@ -193,11 +193,6 @@ async function runConsoleCommand(
 }
 
 export function resolveConsoleEndpoints(env: NodeJS.ProcessEnv): ConsoleEndpoints {
-    if (env.VENDURE_CONSOLE_URL?.trim() || env.VENDURE_CONSOLE_API_URL?.trim()) {
-        throw new Error(
-            'Use the link-specific VENDURE_CONSOLE_LINK_URL and VENDURE_CONSOLE_LINK_API_URL variables for this command.',
-        );
-    }
     const consoleOverride = env.VENDURE_CONSOLE_LINK_URL?.trim() || undefined;
     const apiOverride = env.VENDURE_CONSOLE_LINK_API_URL?.trim() || undefined;
     if (Boolean(consoleOverride) !== Boolean(apiOverride)) {

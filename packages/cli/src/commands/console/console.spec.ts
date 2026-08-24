@@ -90,12 +90,6 @@ describe('console command', () => {
                 VENDURE_CONSOLE_LINK_API_URL: 'https://api.vendure.io',
             }),
         ).toThrow('production Console and API origins must be used together');
-        expect(() =>
-            resolveConsoleEndpoints({
-                VENDURE_CONSOLE_URL: 'https://console.example.com',
-                VENDURE_CONSOLE_API_URL: 'https://api.example.com',
-            }),
-        ).toThrow('link-specific');
     });
 
     it('requires explicit approval for custom remote Console endpoints in non-interactive mode', async () => {
@@ -511,12 +505,7 @@ describe('console command', () => {
     it('reports linked, unlinked, and malformed status without network access', async () => {
         const root = vendureProject();
         const fetchMock = vi.fn() as unknown as typeof fetch;
-        const unlinked = testDependencies(root, fetchMock, {
-            env: {
-                VENDURE_CONSOLE_URL: 'https://console.example.com',
-                VENDURE_CONSOLE_API_URL: 'https://api.example.com',
-            },
-        });
+        const unlinked = testDependencies(root, fetchMock);
         expect(await consoleCommand('status', {}, unlinked.dependencies)).toBe(0);
         expect(unlinked.messages.join('\n')).toContain('Project: Not linked');
 
