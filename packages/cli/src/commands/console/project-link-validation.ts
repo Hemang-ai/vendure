@@ -23,7 +23,7 @@ export function exactObjectValue(
     return object;
 }
 
-export function uuidValue(value: unknown, errorMessage: string): string {
+export function uuid(value: unknown, errorMessage: string): string {
     if (
         typeof value !== 'string' ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
@@ -33,7 +33,7 @@ export function uuidValue(value: unknown, errorMessage: string): string {
     return value;
 }
 
-export function nonEmptyStringValue(value: unknown, errorMessage: string): string {
+export function nonEmptyString(value: unknown, errorMessage: string): string {
     if (typeof value !== 'string' || value.trim().length === 0) {
         throw new Error(errorMessage);
     }

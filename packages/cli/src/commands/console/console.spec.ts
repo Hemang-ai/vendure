@@ -184,7 +184,7 @@ describe('console command', () => {
         expect(test.messages.join('\n')).toContain('Could not update');
     });
 
-    it('links an apps/vendure monorepo from the workspace root and updates that gitignore', async () => {
+    it('links an apps/vendure monorepo from the workspace root and updates the project gitignore', async () => {
         const { workspace, project } = vendureMonorepo({ gitignore: 'node_modules\n' });
         const fetchMock = sequenceFetch(
             jsonResponse(createResponse()),
@@ -194,12 +194,9 @@ describe('console command', () => {
 
         expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
         expect(fs.readJsonSync(getProjectLinkManifestPath(project))).toEqual(manifest);
-        expect(fs.existsSync(path.join(project, '.gitignore'))).toBe(false);
-        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain('**/.vendure/*');
-        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain(
-            '!**/.vendure/project.json',
-        );
-        expect(test.messages.join('\n')).toContain(path.join(workspace, '.gitignore'));
+        expect(fs.readFileSync(path.join(project, '.gitignore'), 'utf8')).toContain('.vendure/*');
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toBe('node_modules\n');
+        expect(test.messages.join('\n')).toContain(path.join(project, '.gitignore'));
     });
 
     it('rewrites a monorepo root directory ignore during link', async () => {
@@ -212,8 +209,13 @@ describe('console command', () => {
 
         expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
         expect(fs.readJsonSync(getProjectLinkManifestPath(project))).toEqual(manifest);
-        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain('**/.vendure/*');
-        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).not.toMatch(/^\.vendure\/$/m);
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain(
+            'apps/vendure/.vendure/*',
+        );
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain(
+            '!apps/vendure/.vendure/project.json',
+        );
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toMatch(/^\.vendure\/$/m);
     });
 
     it('accepts unknown API fields and version-agnostic UUIDs', async () => {

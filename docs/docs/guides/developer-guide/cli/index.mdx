@@ -383,28 +383,25 @@ The v1 manifest contains identity metadata only:
 Commit `.vendure/project.json` so that the repository keeps its Project identity. Ignore all other `.vendure` files.
 They are reserved for machine-local state and may contain secrets.
 
-`vendure console link` checks the `.gitignore` file that applies to the resolved project and writes the
-rules if they are missing.
-
-In a single-package project it updates that project's `.gitignore`:
+`vendure console link` updates the resolved project's `.gitignore` with these rules when they are missing:
 
 ```text
 .vendure/*
 !.vendure/project.json
 ```
 
-In a monorepo such as `apps/vendure`, it updates the repository-root `.gitignore` when that is the file
-in force. Root-level `.vendure/*` only matches a `.vendure` directory at the repository root, so the
-command writes patterns that apply at any depth:
+The command normally changes no `.gitignore` file outside the project directory. One exception applies in a
+monorepo: an ancestor rule such as `.vendure/` prevents Git from reading the project's `.gitignore`. The command
+then adds rules for only the selected project to that ancestor file:
 
 ```text
-**/.vendure/*
-!**/.vendure/project.json
+!apps/vendure/.vendure/
+apps/vendure/.vendure/*
+!apps/vendure/.vendure/project.json
 ```
 
-If `apps/vendure` already has its own `.gitignore`, the command updates that file with the
-project-local rules instead. A parent `.vendure/` directory ignore is rewritten because Git cannot
-un-ignore `project.json` while the parent directory is ignored.
+The original ancestor rule stays unchanged, and other projects remain ignored. The command reports the exact
+`.gitignore` file that it changed.
 
 ### Console environments
 

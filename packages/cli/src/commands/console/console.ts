@@ -7,6 +7,7 @@ import { isNonInteractiveEnvironment, withInteractiveTimeout } from '../../utili
 import { ensureProjectLinkGitignore } from './project-link-gitignore';
 import {
     ManifestReadResult,
+    PROJECT_LINK_MANIFEST_RELATIVE_PATH,
     ProjectLinkManifest,
     parseProjectLinkManifest,
     readProjectLinkManifest,
@@ -14,7 +15,7 @@ import {
     resolveProjectRoot,
     writeProjectLinkManifestAtomic,
 } from './project-link-manifest';
-import { nonEmptyStringValue, objectValue, uuidValue } from './project-link-validation';
+import { nonEmptyString, objectValue, uuid } from './project-link-validation';
 
 const DEFAULT_CONSOLE_URL = 'https://console.vendure.io';
 const DEFAULT_CONSOLE_API_URL = 'https://api.vendure.io';
@@ -79,7 +80,7 @@ class ConsoleRequestError extends Error {
 }
 
 class CommandInterruptedError extends Error {
-    constructor(readonly exitCode: number) {
+    constructor() {
         super('The Console command was interrupted.');
         this.name = 'CommandInterruptedError';
     }
@@ -147,7 +148,7 @@ export async function consoleCommand(
         return await runConsoleCommand(action, options, resolvedDependencies, abortController.signal);
     } catch (error) {
         if (interruptedExitCode !== undefined || error instanceof CommandInterruptedError) {
-            const exitCode = interruptedExitCode ?? (error as CommandInterruptedError).exitCode;
+            const exitCode = interruptedExitCode ?? 130;
             resolvedDependencies.reporter.warn(
                 'Console command interrupted. No Project Link Manifest was changed.',
             );
@@ -271,7 +272,7 @@ async function confirmCustomConsoleEndpoints(
         ].join('\n'),
     );
     if (result === undefined) {
-        throw new CommandInterruptedError(130);
+        throw new CommandInterruptedError();
     }
     if (!result) {
         dependencies.reporter.info('No Console requests or Project Link Manifest changes were made.');
@@ -313,13 +314,13 @@ function reportProjectLinkGitignore(projectRoot: string, reporter: ConsoleReport
     const gitignore = ensureProjectLinkGitignore(projectRoot);
     if (gitignore.kind === 'created' || gitignore.kind === 'updated') {
         reporter.info(
-            `Updated ${gitignore.path} so .vendure/project.json can be committed and other .vendure files stay ignored.`,
+            `Updated ${gitignore.path} so ${PROJECT_LINK_MANIFEST_RELATIVE_PATH} can be committed and other .vendure files stay ignored.`,
         );
         return;
     }
     if (gitignore.kind === 'failed') {
         reporter.warn(
-            `Could not update ${gitignore.path}: ${gitignore.reason}. Commit .vendure/project.json and ignore other .vendure files.`,
+            `Could not update ${gitignore.path}: ${gitignore.reason}. Commit ${PROJECT_LINK_MANIFEST_RELATIVE_PATH} and ignore other .vendure files.`,
         );
         return;
     }
@@ -376,7 +377,7 @@ async function confirmManifestChange(
         `${action === 'replace' ? 'Replace' : 'Remove'} the local link for ${detail}?`,
     );
     if (result === undefined) {
-        throw new CommandInterruptedError(130);
+        throw new CommandInterruptedError();
     }
     if (result !== true) {
         dependencies.reporter.info('No Project Link Manifest changes were made.');
@@ -397,13 +398,16 @@ async function createProjectLink(
         signal,
     );
     const object = objectValue(value, 'Console returned a malformed project-link response.');
-    const id = uuid(object.id, 'project-link id');
+    const id = uuid(object.id, 'Console returned an invalid project-link id.');
     if (object.state !== 'pending' || object.protocolVersion !== 1) {
         throw new Error('Console returned an unsupported Project Link request.');
     }
     const expiresAt = timestamp(object.expiresAt, 'project-link expiry');
-    const pollingSecret = nonEmptyString(object.pollingSecret, 'polling secret');
-    const verificationPath = nonEmptyString(object.verificationPath, 'verification path');
+    const pollingSecret = nonEmptyString(object.pollingSecret, 'Console returned an invalid polling secret.');
+    const verificationPath = nonEmptyString(
+        object.verificationPath,
+        'Console returned an invalid verification path.',
+    );
     if (!verificationPath.startsWith('/') || verificationPath.startsWith('//')) {
         throw new Error('Console returned an invalid verification path.');
     }
@@ -540,7 +544,7 @@ async function requestJson(
             throw error;
         }
         if (signal.aborted) {
-            throw new CommandInterruptedError(130);
+            throw new CommandInterruptedError();
         }
         throw new ConsoleRequestError(
             timedOut
@@ -592,18 +596,17 @@ async function readCappedText(response: Response, signal: AbortSignal): Promise<
             received += value.byteLength;
             if (received > MAX_RESPONSE_BYTES) {
                 await reader.cancel().catch(() => undefined);
-                throw new ConsoleRequestError('Vendure Console API response exceeded the maximum size.', false);
+                throw new ConsoleRequestError(
+                    'Vendure Console API response exceeded the maximum size.',
+                    false,
+                );
             }
             chunks.push(decoder.decode(value, { stream: true }));
         }
         chunks.push(decoder.decode());
         return chunks.join('');
     } finally {
-        try {
-            reader.releaseLock();
-        } catch {
-            // cancel() already released the lock
-        }
+        reader.releaseLock();
     }
 }
 
@@ -663,10 +666,6 @@ function usesCustomRemoteEndpoints(endpoints: ConsoleEndpoints): boolean {
     );
 }
 
-function uuid(value: unknown, label: string): string {
-    return uuidValue(value, `Console returned an invalid ${label}.`);
-}
-
 function timestamp(value: unknown, label: string): number {
     if (typeof value !== 'string') {
         throw new Error(`Console returned an invalid ${label}.`);
@@ -678,20 +677,16 @@ function timestamp(value: unknown, label: string): number {
     return result;
 }
 
-function nonEmptyString(value: unknown, label: string): string {
-    return nonEmptyStringValue(value, `Console returned an invalid ${label}.`);
-}
-
 function throwIfAborted(signal: AbortSignal): void {
     if (signal.aborted) {
-        throw new CommandInterruptedError(130);
+        throw new CommandInterruptedError();
     }
 }
 
 function abortableSleep(milliseconds: number, signal: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
         if (signal.aborted) {
-            reject(new CommandInterruptedError(130));
+            reject(new CommandInterruptedError());
             return;
         }
         const timeout = setTimeout(() => {
@@ -700,7 +695,7 @@ function abortableSleep(milliseconds: number, signal: AbortSignal): Promise<void
         }, milliseconds);
         const onAbort = () => {
             clearTimeout(timeout);
-            reject(new CommandInterruptedError(130));
+            reject(new CommandInterruptedError());
         };
         signal.addEventListener('abort', onAbort, { once: true });
     });

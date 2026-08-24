@@ -5,7 +5,7 @@ import path from 'node:path';
 
 import { MONOREPO_PACKAGE_DIRS } from '../../utilities/monorepo-utils';
 
-import { exactObjectValue, nonEmptyStringValue, uuidValue } from './project-link-validation';
+import { exactObjectValue, nonEmptyString, uuid } from './project-link-validation';
 
 export const PROJECT_LINK_MANIFEST_RELATIVE_PATH = path.join('.vendure', 'project.json');
 
@@ -108,7 +108,7 @@ export function parseProjectLinkManifest(value: unknown, expectedLinkId?: string
     const project = identityObject(root.project, 'project');
     const account = identityObject(root.account, 'account');
     const link = exactObject(root.link, ['id', 'protocolVersion'], 'link');
-    const linkId = uuid(link.id, 'link.id');
+    const linkId = uuid(link.id, 'The link.id must be a UUID.');
     if (link.protocolVersion !== 1) {
         throw new Error('The manifest link.protocolVersion must be 1.');
     }
@@ -230,16 +230,9 @@ function assertNoCrossRootManifest(cwd: string, projectRoot: string): void {
 }
 
 function findManifestSearchBoundary(cwd: string, projectRoot: string): string {
-    let current = cwd;
-    while (true) {
-        if (fs.existsSync(path.join(current, '.git')) && pathsOverlap(current, projectRoot)) {
-            return current;
-        }
-        const parent = path.dirname(current);
-        if (parent === current) {
-            break;
-        }
-        current = parent;
+    const gitRoot = findGitRoot(cwd);
+    if (gitRoot && pathsOverlap(gitRoot, projectRoot)) {
+        return gitRoot;
     }
     if (isPathWithin(cwd, projectRoot)) {
         return cwd;
@@ -248,6 +241,20 @@ function findManifestSearchBoundary(cwd: string, projectRoot: string): string {
         return projectRoot;
     }
     return cwd;
+}
+
+export function findGitRoot(start: string): string | undefined {
+    let current = start;
+    while (true) {
+        if (fs.existsSync(path.join(current, '.git'))) {
+            return current;
+        }
+        const parent = path.dirname(current);
+        if (parent === current) {
+            return undefined;
+        }
+        current = parent;
+    }
 }
 
 function pathsOverlap(first: string, second: string): boolean {
@@ -300,8 +307,8 @@ function realDirectory(directory: string, label: string): string {
 function identityObject(value: unknown, label: string): { id: string; name: string } {
     const object = exactObject(value, ['id', 'name'], label);
     return {
-        id: uuid(object.id, `${label}.id`),
-        name: nonEmptyString(object.name, `${label}.name`),
+        id: uuid(object.id, `The ${label}.id must be a UUID.`),
+        name: nonEmptyString(object.name, `The ${label}.name must be a non-empty string.`),
     };
 }
 
@@ -312,12 +319,4 @@ function exactObject(value: unknown, keys: string[], label: string): Record<stri
         `The ${label} must be an object.`,
         `The ${label} contains unexpected or missing fields.`,
     );
-}
-
-function uuid(value: unknown, label: string): string {
-    return uuidValue(value, `The ${label} must be a UUID.`);
-}
-
-function nonEmptyString(value: unknown, label: string): string {
-    return nonEmptyStringValue(value, `The ${label} must be a non-empty string.`);
 }
