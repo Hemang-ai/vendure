@@ -218,7 +218,7 @@
           "title": "CLI",
           "slug": "cli",
           "file": "docs/guides/developer-guide/cli/index.mdx",
-          "lastModified": "2026-08-17T11:43:39+02:00"
+          "lastModified": "2026-08-24T13:59:38+02:00"
         },
         {
           "title": "AI-assisted Development",
@@ -4031,13 +4031,13 @@
                   "title": "UseDetailPage",
                   "slug": "use-detail-page",
                   "file": "docs/reference/dashboard/detail-views/use-detail-page.mdx",
-                  "lastModified": "2026-07-20T15:59:41+02:00"
+                  "lastModified": "2026-08-24T12:05:27Z"
                 },
                 {
                   "title": "UseGeneratedForm",
                   "slug": "use-generated-form",
                   "file": "docs/reference/dashboard/detail-views/use-generated-form.mdx",
-                  "lastModified": "2026-07-22T14:03:14Z"
+                  "lastModified": "2026-08-24T12:05:27Z"
                 }
               ],
               "lastModified": "2026-01-28T14:49:21+01:00"
