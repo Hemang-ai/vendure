@@ -83,11 +83,24 @@ export class TranslationDiffer<Entity extends Translatable & { id: ID }> {
                     if (!isUniqueConstraintViolationError(err)) {
                         throw new InternalServerError(err.message);
                     }
-                    // A concurrent request already inserted a translation for this languageCode
-                    // between our initial lookup and this insert. Update that row instead of
-                    // failing the request and leaving the entity without this translation.
-                    const concurrentlyInserted = await this.connection
-                        .getRepository(ctx, this.translationCtor)
+                    // A concurrent request inserted a translation for this languageCode between
+                    // our initial read and this insert, and has already committed — our insert
+                    // blocked on its row lock until it did. Adopt that committed row rather than
+                    // failing the request.
+                    //
+                    // The lookup must use the raw connection: under REPEATABLE READ (the
+                    // MySQL/MariaDB default) this request's transaction snapshot predates the
+                    // concurrent commit, so a read inside the transaction cannot see the row.
+                    // Writing our own content to that row from inside the transaction is not an
+                    // option either, because MariaDB (with its default snapshot isolation)
+                    // rejects any write to a row that changed after the snapshot was taken
+                    // ("Record has changed since last read"). So the losing request converges on
+                    // the winner's row instead of overwriting it. For the practical trigger of
+                    // this race — the same update submitted twice, e.g. a double-clicked save
+                    // button — the two payloads are identical, so the outcome is the same either
+                    // way.
+                    const concurrentlyInserted = await this.connection.rawConnection
+                        .getRepository(this.translationCtor)
                         .findOne({
                             where: {
                                 base: { id: entity.id },
@@ -97,10 +110,7 @@ export class TranslationDiffer<Entity extends Translatable & { id: ID }> {
                     if (!concurrentlyInserted) {
                         throw new InternalServerError(err.message);
                     }
-                    translation.id = concurrentlyInserted.id;
-                    newTranslation = await this.connection
-                        .getRepository(ctx, this.translationCtor)
-                        .save(translation as any);
+                    newTranslation = concurrentlyInserted;
                 }
                 entity.translations.push(newTranslation);
             }
