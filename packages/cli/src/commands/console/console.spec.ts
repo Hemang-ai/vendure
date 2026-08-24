@@ -129,6 +129,38 @@ describe('console command', () => {
         expect(test.messages.join('\n')).toContain('Could not update');
     });
 
+    it('links an apps/vendure monorepo from the workspace root and updates that gitignore', async () => {
+        const { workspace, project } = vendureMonorepo({ gitignore: 'node_modules\n' });
+        const fetchMock = sequenceFetch(
+            jsonResponse(createResponse()),
+            jsonResponse({ state: 'approved', expiresAt: expiry(), manifest }),
+        );
+        const test = testDependencies(workspace, fetchMock);
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
+        expect(fs.readJsonSync(getProjectLinkManifestPath(project))).toEqual(manifest);
+        expect(fs.existsSync(path.join(project, '.gitignore'))).toBe(false);
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain('**/.vendure/*');
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain(
+            '!**/.vendure/project.json',
+        );
+        expect(test.messages.join('\n')).toContain(path.join(workspace, '.gitignore'));
+    });
+
+    it('rewrites a monorepo root directory ignore during link', async () => {
+        const { workspace, project } = vendureMonorepo({ gitignore: '.vendure/\n' });
+        const fetchMock = sequenceFetch(
+            jsonResponse(createResponse()),
+            jsonResponse({ state: 'approved', expiresAt: expiry(), manifest }),
+        );
+        const test = testDependencies(workspace, fetchMock);
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
+        expect(fs.readJsonSync(getProjectLinkManifestPath(project))).toEqual(manifest);
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain('**/.vendure/*');
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).not.toMatch(/^\.vendure\/$/m);
+    });
+
     it('accepts unknown API fields and version-agnostic UUIDs', async () => {
         const root = vendureProject();
         const versionSevenManifest: ProjectLinkManifest = {
@@ -462,4 +494,20 @@ function vendureProject(): string {
         dependencies: { '@vendure/core': '3.7.2' },
     });
     return root;
+}
+
+function vendureMonorepo(options: { gitignore?: string } = {}): { workspace: string; project: string } {
+    const workspace = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'vendure-console-monorepo-')));
+    temporaryDirectories.push(workspace);
+    fs.ensureDirSync(path.join(workspace, '.git'));
+    fs.writeJsonSync(path.join(workspace, 'package.json'), { private: true });
+    if (options.gitignore !== undefined) {
+        fs.writeFileSync(path.join(workspace, '.gitignore'), options.gitignore);
+    }
+    const project = path.join(workspace, 'apps', 'vendure');
+    fs.ensureDirSync(project);
+    fs.writeJsonSync(path.join(project, 'package.json'), {
+        dependencies: { '@vendure/core': '3.7.2' },
+    });
+    return { workspace, project: fs.realpathSync(project) };
 }

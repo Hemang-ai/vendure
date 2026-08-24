@@ -67,6 +67,18 @@ describe('Project Link Manifest', () => {
         expect(resolveProjectRoot(nested)).toBe(root);
     });
 
+    it('resolves apps/vendure from the workspace root', () => {
+        const workspace = temporaryDirectory();
+        fs.ensureDirSync(path.join(workspace, '.git'));
+        fs.writeJsonSync(path.join(workspace, 'package.json'), { private: true });
+        const project = vendureProject(path.join(workspace, 'apps', 'vendure'));
+        const nested = path.join(project, 'src');
+        fs.ensureDirSync(nested);
+
+        expect(resolveProjectRoot(workspace)).toBe(project);
+        expect(resolveProjectRoot(nested)).toBe(project);
+    });
+
     it('resolves one workspace project and rejects ambiguous workspaces', () => {
         const workspace = temporaryDirectory();
         fs.writeJsonSync(path.join(workspace, 'package.json'), { private: true });

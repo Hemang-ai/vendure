@@ -7,6 +7,8 @@ import {
     PROJECT_LINK_GITIGNORE_COMMENT,
     PROJECT_LINK_IGNORE_CONTENTS,
     PROJECT_LINK_KEEP_MANIFEST,
+    PROJECT_LINK_NESTED_IGNORE_CONTENTS,
+    PROJECT_LINK_NESTED_KEEP_MANIFEST,
     applyProjectLinkGitignoreRules,
     ensureProjectLinkGitignore,
     getProjectLinkGitignorePath,
@@ -122,10 +124,142 @@ describe('Project Link gitignore', () => {
         expect(result.path).toBe(getProjectLinkGitignorePath(root));
         expect(fs.statSync(getProjectLinkGitignorePath(root)).isDirectory()).toBe(true);
     });
+
+    it('updates the repo-root gitignore for an apps/vendure monorepo', () => {
+        const { workspace, project } = vendureMonorepo({ gitignore: 'node_modules\n' });
+
+        const result = ensureProjectLinkGitignore(project);
+
+        expect(result).toEqual({
+            kind: 'updated',
+            path: path.join(workspace, '.gitignore'),
+        });
+        expect(fs.existsSync(getProjectLinkGitignorePath(project))).toBe(false);
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toBe(
+            [
+                'node_modules',
+                '',
+                PROJECT_LINK_GITIGNORE_COMMENT,
+                PROJECT_LINK_NESTED_IGNORE_CONTENTS,
+                PROJECT_LINK_NESTED_KEEP_MANIFEST,
+                '',
+            ].join('\n'),
+        );
+    });
+
+    it('leaves a monorepo root gitignore unchanged when nested rules already apply', () => {
+        const original = [
+            'node_modules',
+            PROJECT_LINK_NESTED_IGNORE_CONTENTS,
+            PROJECT_LINK_NESTED_KEEP_MANIFEST,
+            '',
+        ].join('\n');
+        const { workspace, project } = vendureMonorepo({ gitignore: original });
+
+        expect(ensureProjectLinkGitignore(project)).toEqual({
+            kind: 'unchanged',
+            path: path.join(workspace, '.gitignore'),
+        });
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toBe(original);
+        expect(fs.existsSync(getProjectLinkGitignorePath(project))).toBe(false);
+    });
+
+    it('rewrites a repo-root directory ignore so apps/vendure/.vendure/project.json can be committed', () => {
+        const { workspace, project } = vendureMonorepo({ gitignore: '.vendure/\n' });
+
+        expect(ensureProjectLinkGitignore(project).kind).toBe('updated');
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toBe(
+            [
+                PROJECT_LINK_NESTED_IGNORE_CONTENTS,
+                '',
+                PROJECT_LINK_GITIGNORE_COMMENT,
+                PROJECT_LINK_NESTED_KEEP_MANIFEST,
+                '',
+            ].join('\n'),
+        );
+        expect(fs.existsSync(getProjectLinkGitignorePath(project))).toBe(false);
+    });
+
+    it('prefers an existing apps/vendure gitignore over the repo root', () => {
+        const { workspace, project } = vendureMonorepo({ gitignore: 'node_modules\n' });
+        fs.writeFileSync(getProjectLinkGitignorePath(project), 'dist\n');
+
+        const result = ensureProjectLinkGitignore(project);
+
+        expect(result).toEqual({
+            kind: 'updated',
+            path: getProjectLinkGitignorePath(project),
+        });
+        expect(fs.readFileSync(getProjectLinkGitignorePath(project), 'utf8')).toContain(
+            PROJECT_LINK_IGNORE_CONTENTS,
+        );
+        expect(fs.readFileSync(getProjectLinkGitignorePath(project), 'utf8')).toContain(
+            PROJECT_LINK_KEEP_MANIFEST,
+        );
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toBe('node_modules\n');
+    });
+
+    it('fixes a blocking repo-root directory ignore when the package already has local rules', () => {
+        const { workspace, project } = vendureMonorepo({ gitignore: '.vendure/\n' });
+        const packageIgnore = [
+            PROJECT_LINK_IGNORE_CONTENTS,
+            PROJECT_LINK_KEEP_MANIFEST,
+            '',
+        ].join('\n');
+        fs.writeFileSync(getProjectLinkGitignorePath(project), packageIgnore);
+
+        expect(ensureProjectLinkGitignore(project).kind).toBe('updated');
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain(
+            PROJECT_LINK_NESTED_IGNORE_CONTENTS,
+        );
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain(
+            PROJECT_LINK_NESTED_KEEP_MANIFEST,
+        );
+        expect(fs.readFileSync(getProjectLinkGitignorePath(project), 'utf8')).toBe(packageIgnore);
+    });
+
+    it('accepts path-specific repo-root rules for apps/vendure', () => {
+        const original = ['apps/vendure/.vendure/*', '!apps/vendure/.vendure/project.json', ''].join('\n');
+        const { workspace, project } = vendureMonorepo({ gitignore: original });
+
+        expect(ensureProjectLinkGitignore(project)).toEqual({
+            kind: 'unchanged',
+            path: path.join(workspace, '.gitignore'),
+        });
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toBe(original);
+    });
+
+    it('writes nested rules when apply runs in nested mode', () => {
+        expect(applyProjectLinkGitignoreRules('node_modules\n', 'nested')).toBe(
+            [
+                'node_modules',
+                '',
+                PROJECT_LINK_GITIGNORE_COMMENT,
+                PROJECT_LINK_NESTED_IGNORE_CONTENTS,
+                PROJECT_LINK_NESTED_KEEP_MANIFEST,
+                '',
+            ].join('\n'),
+        );
+    });
 });
 
 function temporaryDirectory(): string {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vendure-console-gitignore-'));
     temporaryDirectories.push(directory);
     return fs.realpathSync(directory);
+}
+
+function vendureMonorepo(options: { gitignore?: string } = {}): { workspace: string; project: string } {
+    const workspace = temporaryDirectory();
+    fs.ensureDirSync(path.join(workspace, '.git'));
+    fs.writeJsonSync(path.join(workspace, 'package.json'), { private: true });
+    if (options.gitignore !== undefined) {
+        fs.writeFileSync(path.join(workspace, '.gitignore'), options.gitignore);
+    }
+    const project = path.join(workspace, 'apps', 'vendure');
+    fs.ensureDirSync(project);
+    fs.writeJsonSync(path.join(project, 'package.json'), {
+        dependencies: { '@vendure/core': '3.7.2' },
+    });
+    return { workspace, project: fs.realpathSync(project) };
 }
