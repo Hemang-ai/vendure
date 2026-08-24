@@ -11,20 +11,18 @@ import {
     consoleCommand,
     resolveConsoleEndpoints,
 } from './console';
+import {
+    ACCOUNT_ID,
+    LINK_ID,
+    NOW,
+    POLLING_SECRET,
+    createResponse,
+    expiry,
+    manifest,
+} from './console.fixtures';
 import { ProjectLinkManifest, getProjectLinkManifestPath } from './project-link-manifest';
 
-const NOW = Date.parse('2026-08-19T10:00:00.000Z');
-const ACCOUNT_ID = '11111111-1111-4111-8111-111111111111';
-const PROJECT_ID = '22222222-2222-4222-8222-222222222222';
-const LINK_ID = '33333333-3333-4333-8333-333333333333';
-const POLLING_SECRET = 'one-time-polling-secret';
-
-const manifest: ProjectLinkManifest = {
-    schemaVersion: 1,
-    project: { id: PROJECT_ID, name: 'Storefront' },
-    account: { id: ACCOUNT_ID, name: 'Acme' },
-    link: { id: LINK_ID, protocolVersion: 1 },
-};
+const UUID_V7_LINK_ID = '33333333-3333-7333-8333-333333333333';
 
 const temporaryDirectories: string[] = [];
 
@@ -45,6 +43,16 @@ describe('console command', () => {
         expect(await consoleCommand('unknown', {}, second.dependencies)).toBe(1);
         expect(first.messages.join('\n')).toContain('vendure console link');
         expect(second.messages.join('\n')).toContain('Unknown console action');
+    });
+
+    it('resolves the default working directory when the command runs', async () => {
+        const root = vendureProject();
+        const test = testDependencies(root, vi.fn() as unknown as typeof fetch);
+        delete test.dependencies.cwd;
+        vi.spyOn(process, 'cwd').mockReturnValue(root);
+
+        expect(await consoleCommand('status', {}, test.dependencies)).toBe(0);
+        expect(test.messages.join('\n')).toContain('Project: Not linked');
     });
 
     it('requires paired endpoint overrides and validates origins', () => {
@@ -82,6 +90,33 @@ describe('console command', () => {
         expect(fetchMock).toHaveBeenCalledTimes(3);
         expect(fetchMock.mock.calls[1][1]?.body).toBe(JSON.stringify({ pollingSecret: POLLING_SECRET }));
         expect(test.messages.join('\n')).toContain('safe to commit');
+    });
+
+    it('accepts unknown API fields and version-agnostic UUIDs', async () => {
+        const root = vendureProject();
+        const versionSevenManifest: ProjectLinkManifest = {
+            ...manifest,
+            link: { id: UUID_V7_LINK_ID, protocolVersion: 1 },
+        };
+        const fetchMock = sequenceFetch(
+            jsonResponse({
+                ...createResponse(),
+                id: UUID_V7_LINK_ID,
+                verificationPath: `/?link=${UUID_V7_LINK_ID}`,
+                serverCapability: 'future-value',
+            }),
+            jsonResponse({ state: 'pending', expiresAt: expiry(), retryHint: 'future-value' }),
+            jsonResponse({
+                state: 'approved',
+                expiresAt: expiry(),
+                manifest: versionSevenManifest,
+                auditId: 'future-value',
+            }),
+        );
+        const test = testDependencies(root, fetchMock);
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
+        expect(fs.readJsonSync(getProjectLinkManifestPath(root))).toEqual(versionSevenManifest);
     });
 
     it('prints the safe verification URL and continues when browser launch fails', async () => {
@@ -143,10 +178,12 @@ describe('console command', () => {
         expect(fs.existsSync(getProjectLinkManifestPath(root))).toBe(false);
     });
 
-    it('retries transient poll failures and does not retry request creation', async () => {
+    it('retries transient poll failures until expiry and does not retry request creation', async () => {
         const root = vendureProject();
         const fetchMock = sequenceFetch(
             jsonResponse(createResponse()),
+            new Response('', { status: 503 }),
+            new Response('', { status: 502 }),
             new Response('', { status: 503 }),
             new Response('', { status: 502 }),
             jsonResponse({ state: 'approved', expiresAt: expiry(), manifest }),
@@ -154,7 +191,7 @@ describe('console command', () => {
         const test = testDependencies(root, fetchMock);
 
         expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
-        expect(test.sleeps).toEqual([500, 1_000]);
+        expect(test.sleeps).toEqual([500, 1_000, 2_000, 2_000]);
 
         const createFailure = vi.fn(() =>
             Promise.resolve(new Response('', { status: 503 })),
@@ -168,13 +205,29 @@ describe('console command', () => {
         const root = vendureProject();
         const fetchMock = vi
             .fn()
-            .mockResolvedValueOnce(jsonResponse(createResponse()))
+            .mockResolvedValueOnce(jsonResponse(createResponse(new Date(NOW + 1_500).toISOString())))
             .mockRejectedValue(new Error(`network error ${POLLING_SECRET}`)) as unknown as typeof fetch;
         const test = testDependencies(root, fetchMock);
 
         expect(await consoleCommand('link', {}, test.dependencies)).toBe(1);
         expect([...test.messages, ...test.urls].join('\n')).not.toContain(POLLING_SECRET);
         expect(fs.existsSync(getProjectLinkManifestPath(root))).toBe(false);
+    });
+
+    it('uses the latest expiry returned by polling', async () => {
+        const root = vendureProject();
+        const fetchMock = sequenceFetch(
+            jsonResponse(createResponse(new Date(NOW + 1_000).toISOString())),
+            jsonResponse({ state: 'pending', expiresAt: new Date(NOW + 5_000).toISOString() }),
+            jsonResponse({
+                state: 'approved',
+                expiresAt: new Date(NOW + 5_000).toISOString(),
+                manifest,
+            }),
+        );
+        const test = testDependencies(root, fetchMock);
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
     });
 
     it('fails closed for replacement in non-interactive mode and allows --force', async () => {
@@ -226,6 +279,19 @@ describe('console command', () => {
 
         expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
         expect(fetchMock).not.toHaveBeenCalled();
+        expect(fs.readJsonSync(getProjectLinkManifestPath(root))).toEqual(manifest);
+    });
+
+    it('returns an interrupt exit code when the confirmation prompt is cancelled', async () => {
+        const root = vendureProject();
+        fs.ensureDirSync(path.dirname(getProjectLinkManifestPath(root)));
+        fs.writeJsonSync(getProjectLinkManifestPath(root), manifest);
+        const test = testDependencies(root, vi.fn() as unknown as typeof fetch, {
+            isNonInteractive: () => false,
+            prompt: () => Promise.resolve(undefined),
+        });
+
+        expect(await consoleCommand('unlink', {}, test.dependencies)).toBe(130);
         expect(fs.readJsonSync(getProjectLinkManifestPath(root))).toEqual(manifest);
     });
 
@@ -301,6 +367,7 @@ function testDependencies(
     const messages: string[] = [];
     const urls: string[] = [];
     const sleeps: number[] = [];
+    let currentTime = NOW;
     const reporter: ConsoleReporter = {
         error: message => messages.push(message),
         info: message => messages.push(message),
@@ -318,12 +385,13 @@ function testDependencies(
             },
             fetch: fetchImplementation,
             isNonInteractive: () => true,
-            now: () => NOW,
+            now: () => currentTime,
             openUrl: () => Promise.resolve(),
             prompt: () => Promise.resolve(true),
             reporter,
             sleep: milliseconds => {
                 sleeps.push(milliseconds);
+                currentTime += milliseconds;
                 return Promise.resolve();
             },
             ...overrides,
@@ -332,21 +400,6 @@ function testDependencies(
         sleeps,
         urls,
     };
-}
-
-function createResponse() {
-    return {
-        id: LINK_ID,
-        state: 'pending',
-        protocolVersion: 1,
-        expiresAt: expiry(),
-        pollingSecret: POLLING_SECRET,
-        verificationPath: `/?link=${LINK_ID}`,
-    };
-}
-
-function expiry(): string {
-    return new Date(NOW + 10 * 60 * 1_000).toISOString();
 }
 
 function jsonResponse(value: unknown): Response {

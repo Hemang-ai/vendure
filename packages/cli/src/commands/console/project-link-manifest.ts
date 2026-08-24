@@ -5,6 +5,8 @@ import path from 'node:path';
 
 import { MONOREPO_PACKAGE_DIRS } from '../../utilities/monorepo-utils';
 
+import { exactObjectValue, nonEmptyStringValue, uuidValue } from './project-link-validation';
+
 export const PROJECT_LINK_MANIFEST_RELATIVE_PATH = path.join('.vendure', 'project.json');
 
 export interface ProjectLinkManifest {
@@ -33,9 +35,11 @@ const defaultFileOperations: AtomicFileOperations = {
     unlink: fsPromises.unlink,
 };
 
-const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export function resolveProjectRoot(cwd: string, selectedProject?: string): string {
+export function resolveProjectRoot(
+    cwd: string,
+    selectedProject?: string,
+    allowCrossRootManifest = false,
+): string {
     const resolvedCwd = realDirectory(cwd, 'Current working directory');
     let projectRoot: string;
 
@@ -64,7 +68,9 @@ export function resolveProjectRoot(cwd: string, selectedProject?: string): strin
         }
     }
 
-    assertNoCrossRootManifest(resolvedCwd, projectRoot);
+    if (!allowCrossRootManifest) {
+        assertNoCrossRootManifest(resolvedCwd, projectRoot);
+    }
     return projectRoot;
 }
 
@@ -205,6 +211,7 @@ function findWorkspaceVendureProjects(root: string): string[] {
 
 function assertNoCrossRootManifest(cwd: string, projectRoot: string): void {
     const targetManifest = getProjectLinkManifestPath(projectRoot);
+    const boundary = findManifestSearchBoundary(cwd, projectRoot);
     let current = cwd;
     while (true) {
         const ancestorManifest = getProjectLinkManifestPath(current);
@@ -221,12 +228,44 @@ function assertNoCrossRootManifest(cwd: string, projectRoot: string): void {
                 ].join('\n'),
             );
         }
+        if (current === boundary) {
+            return;
+        }
+        current = path.dirname(current);
+    }
+}
+
+function findManifestSearchBoundary(cwd: string, projectRoot: string): string {
+    let current = cwd;
+    while (true) {
+        if (fs.existsSync(path.join(current, '.git')) && pathsOverlap(current, projectRoot)) {
+            return current;
+        }
         const parent = path.dirname(current);
         if (parent === current) {
-            return;
+            break;
         }
         current = parent;
     }
+    if (isPathWithin(cwd, projectRoot)) {
+        return cwd;
+    }
+    if (isPathWithin(projectRoot, cwd)) {
+        return projectRoot;
+    }
+    return cwd;
+}
+
+function pathsOverlap(first: string, second: string): boolean {
+    return isPathWithin(first, second) || isPathWithin(second, first);
+}
+
+function isPathWithin(parent: string, candidate: string): boolean {
+    const relative = path.relative(parent, candidate);
+    return (
+        relative === '' ||
+        (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))
+    );
 }
 
 function assertVendureProject(projectRoot: string): void {
@@ -273,31 +312,18 @@ function identityObject(value: unknown, label: string): { id: string; name: stri
 }
 
 function exactObject(value: unknown, keys: string[], label: string): Record<string, unknown> {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        throw new Error(`The ${label} must be an object.`);
-    }
-    const object = value as Record<string, unknown>;
-    const actualKeys = Object.keys(object).sort((a, b) => a.localeCompare(b));
-    const expectedKeys = [...keys].sort((a, b) => a.localeCompare(b));
-    if (
-        actualKeys.length !== expectedKeys.length ||
-        actualKeys.some((key, index) => key !== expectedKeys[index])
-    ) {
-        throw new Error(`The ${label} contains unexpected or missing fields.`);
-    }
-    return object;
+    return exactObjectValue(
+        value,
+        keys,
+        `The ${label} must be an object.`,
+        `The ${label} contains unexpected or missing fields.`,
+    );
 }
 
 function uuid(value: unknown, label: string): string {
-    if (typeof value !== 'string' || !UUID_V4_PATTERN.test(value)) {
-        throw new Error(`The ${label} must be a UUID v4.`);
-    }
-    return value;
+    return uuidValue(value, `The ${label} must be a UUID.`);
 }
 
 function nonEmptyString(value: unknown, label: string): string {
-    if (typeof value !== 'string' || value.trim().length === 0) {
-        throw new Error(`The ${label} must be a non-empty string.`);
-    }
-    return value;
+    return nonEmptyStringValue(value, `The ${label} must be a non-empty string.`);
 }

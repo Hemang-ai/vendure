@@ -6,19 +6,8 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { ConsoleCommandDependencies, ConsoleReporter, consoleCommand } from './console';
-import { ProjectLinkManifest, getProjectLinkManifestPath } from './project-link-manifest';
-
-const ACCOUNT_ID = '11111111-1111-4111-8111-111111111111';
-const PROJECT_ID = '22222222-2222-4222-8222-222222222222';
-const LINK_ID = '33333333-3333-4333-8333-333333333333';
-const POLLING_SECRET = 'integration-polling-secret';
-
-const manifest: ProjectLinkManifest = {
-    schemaVersion: 1,
-    project: { id: PROJECT_ID, name: 'Integration Project' },
-    account: { id: ACCOUNT_ID, name: 'Integration Account' },
-    link: { id: LINK_ID, protocolVersion: 1 },
-};
+import { LINK_ID, POLLING_SECRET, manifest } from './console.fixtures';
+import { getProjectLinkManifestPath } from './project-link-manifest';
 
 let server: Server | undefined;
 let projectRoot: string | undefined;

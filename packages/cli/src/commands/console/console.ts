@@ -13,13 +13,13 @@ import {
     resolveProjectRoot,
     writeProjectLinkManifestAtomic,
 } from './project-link-manifest';
+import { nonEmptyStringValue, objectValue, uuidValue } from './project-link-validation';
 
 const DEFAULT_CONSOLE_URL = 'https://console.vendure.io';
 const DEFAULT_CONSOLE_API_URL = 'https://api.vendure.io';
 const POLL_INTERVAL_MS = 2_000;
 const REQUEST_TIMEOUT_MS = 10_000;
-const MAX_POLL_ATTEMPTS = 3;
-const RETRY_DELAYS_MS = [500, 1_000];
+const MAX_RETRY_DELAY_MS = 2_000;
 
 export interface ConsoleCommandOptions {
     project?: string;
@@ -90,29 +90,32 @@ const defaultReporter: ConsoleReporter = {
     url: value => process.stdout.write(`${value}\n`),
 };
 
-const defaultDependencies: ConsoleCommandDependencies = {
-    cwd: process.cwd(),
-    env: process.env,
-    fetch: globalThis.fetch,
-    isNonInteractive: () => isNonInteractiveEnvironment(),
-    now: () => Date.now(),
-    openUrl: openUrlInBrowser,
-    prompt: async message => {
-        const result = await withInteractiveTimeout(() => confirm({ message }), {
-            examples: ['vendure console link --force', 'vendure console unlink --force'],
-            helpCommands: ['vendure console --help'],
-        });
-        return isCancel(result) ? undefined : result;
-    },
-    reporter: defaultReporter,
-    sleep: abortableSleep,
-};
+function createDefaultDependencies(): ConsoleCommandDependencies {
+    return {
+        cwd: process.cwd(),
+        env: process.env,
+        fetch: globalThis.fetch,
+        isNonInteractive: () => isNonInteractiveEnvironment(),
+        now: () => Date.now(),
+        openUrl: openUrlInBrowser,
+        prompt: async message => {
+            const result = await withInteractiveTimeout(() => confirm({ message }), {
+                examples: ['vendure console link --force', 'vendure console unlink --force'],
+                helpCommands: ['vendure console --help'],
+            });
+            return isCancel(result) ? undefined : result;
+        },
+        reporter: defaultReporter,
+        sleep: abortableSleep,
+    };
+}
 
 export async function consoleCommand(
     action?: string,
     options: ConsoleCommandOptions = {},
     dependencies: Partial<ConsoleCommandDependencies> = {},
 ): Promise<number> {
+    const resolvedDependencies = { ...createDefaultDependencies(), ...dependencies };
     const abortController = new AbortController();
     let interruptedExitCode: number | undefined;
     const onSigint = () => {
@@ -134,23 +137,19 @@ export async function consoleCommand(
     }
 
     try {
-        return await runConsoleCommand(
-            action,
-            options,
-            { ...defaultDependencies, ...dependencies },
-            abortController.signal,
-        );
+        return await runConsoleCommand(action, options, resolvedDependencies, abortController.signal);
     } catch (error) {
-        const deps = { ...defaultDependencies, ...dependencies };
         if (interruptedExitCode !== undefined || error instanceof CommandInterruptedError) {
             const exitCode = interruptedExitCode ?? (error as CommandInterruptedError).exitCode;
-            deps.reporter.warn('Console command interrupted. No Project Link Manifest was changed.');
+            resolvedDependencies.reporter.warn(
+                'Console command interrupted. No Project Link Manifest was changed.',
+            );
             return exitCode;
         }
         if (error instanceof CliCommandExit) {
             throw error;
         }
-        deps.reporter.error(error instanceof Error ? error.message : String(error));
+        resolvedDependencies.reporter.error(error instanceof Error ? error.message : String(error));
         return 1;
     } finally {
         process.removeListener('SIGINT', onSigint);
@@ -159,7 +158,7 @@ export async function consoleCommand(
     }
 }
 
-export async function runConsoleCommand(
+async function runConsoleCommand(
     action: string | undefined,
     options: ConsoleCommandOptions,
     dependencies: ConsoleCommandDependencies,
@@ -176,7 +175,7 @@ export async function runConsoleCommand(
         return 1;
     }
 
-    const projectRoot = resolveProjectRoot(dependencies.cwd, options.project);
+    const projectRoot = resolveProjectRoot(dependencies.cwd, options.project, options.force);
     if (normalizedAction === 'status') {
         return status(projectRoot, dependencies.reporter);
     }
@@ -216,9 +215,6 @@ async function link(
 
     const endpoints = resolveConsoleEndpoints(dependencies.env);
     const request = await createProjectLink(endpoints, dependencies, signal);
-    if (dependencies.now() >= request.expiresAt) {
-        throw new Error('The Project Link request expired. Run vendure console link again.');
-    }
     dependencies.reporter.info('Approve the Project link in your browser.');
     try {
         await dependencies.openUrl(request.verificationUrl);
@@ -313,6 +309,9 @@ async function confirmManifestChange(
     const result = await dependencies.prompt(
         `${action === 'replace' ? 'Replace' : 'Remove'} the local link for ${detail}?`,
     );
+    if (result === undefined) {
+        throw new CommandInterruptedError(130);
+    }
     if (result !== true) {
         dependencies.reporter.info('No Project Link Manifest changes were made.');
         return 'cancelled';
@@ -331,11 +330,7 @@ async function createProjectLink(
         dependencies,
         signal,
     );
-    const object = exactObject(
-        value,
-        ['id', 'state', 'protocolVersion', 'expiresAt', 'pollingSecret', 'verificationPath'],
-        'project-link response',
-    );
+    const object = objectValue(value, 'Console returned a malformed project-link response.');
     const id = uuid(object.id, 'project-link id');
     if (object.state !== 'pending' || object.protocolVersion !== 1) {
         throw new Error('Console returned an unsupported Project Link request.');
@@ -362,13 +357,15 @@ async function waitForApproval(
     dependencies: ConsoleCommandDependencies,
     signal: AbortSignal,
 ): Promise<ProjectLinkManifest> {
+    let expiresAt = request.expiresAt;
     while (true) {
         throwIfAborted(signal);
-        if (dependencies.now() >= request.expiresAt) {
+        if (dependencies.now() >= expiresAt) {
             throw new Error('The Project Link request expired. Run vendure console link again.');
         }
 
-        const result = await pollWithRetry(request, endpoints, dependencies, signal);
+        const result = await pollWithRetry(request, expiresAt, endpoints, dependencies, signal);
+        expiresAt = result.expiresAt;
         if (result.state === 'approved') {
             if (!result.manifest) {
                 throw new Error('Console approved the request without returning a Project Link Manifest.');
@@ -387,11 +384,16 @@ async function waitForApproval(
 
 async function pollWithRetry(
     request: ProjectLinkRequest,
+    expiresAt: number,
     endpoints: ConsoleEndpoints,
     dependencies: ConsoleCommandDependencies,
     signal: AbortSignal,
 ): Promise<ProjectLinkPollResult> {
-    for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+    let attempt = 0;
+    while (true) {
+        if (dependencies.now() >= expiresAt) {
+            throw new Error('The Project Link request expired. Run vendure console link again.');
+        }
         try {
             const value = await requestJson(
                 `${endpoints.apiUrl}/project-links/${encodeURIComponent(request.id)}/poll`,
@@ -405,36 +407,35 @@ async function pollWithRetry(
             );
             return parsePollResult(value, request.id);
         } catch (error) {
-            if (
-                !(error instanceof ConsoleRequestError) ||
-                !error.transient ||
-                attempt === MAX_POLL_ATTEMPTS - 1
-            ) {
+            if (!(error instanceof ConsoleRequestError) || !error.transient) {
                 throw error;
             }
-            await dependencies.sleep(RETRY_DELAYS_MS[attempt], signal);
+            const remainingMs = expiresAt - dependencies.now();
+            if (remainingMs <= 0) {
+                throw new Error('The Project Link request expired. Run vendure console link again.');
+            }
+            await dependencies.sleep(Math.min(retryDelay(attempt), remainingMs), signal);
+            attempt++;
         }
     }
-    throw new Error('Console polling failed.');
+}
+
+function retryDelay(attempt: number): number {
+    return Math.min(attempt === 0 ? 500 : attempt * 1_000, MAX_RETRY_DELAY_MS);
 }
 
 function parsePollResult(value: unknown, expectedLinkId: string): ProjectLinkPollResult {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        throw new Error('Console returned a malformed Project Link polling response.');
-    }
-    const record = value as Record<string, unknown>;
+    const record = objectValue(value, 'Console returned a malformed Project Link polling response.');
     const state = record.state;
     if (!['pending', 'approved', 'denied', 'expired'].includes(String(state))) {
         throw new Error('Console returned an unknown Project Link state.');
     }
-    const expectedKeys = state === 'approved' ? ['state', 'expiresAt', 'manifest'] : ['state', 'expiresAt'];
-    const object = exactObject(value, expectedKeys, 'project-link polling response');
     const result: ProjectLinkPollResult = {
         state: state as ProjectLinkPollResult['state'],
-        expiresAt: timestamp(object.expiresAt, 'project-link expiry'),
+        expiresAt: timestamp(record.expiresAt, 'project-link expiry'),
     };
     if (state === 'approved') {
-        result.manifest = parseProjectLinkManifest(object.manifest, expectedLinkId);
+        result.manifest = parseProjectLinkManifest(record.manifest, expectedLinkId);
     }
     return result;
 }
@@ -502,30 +503,8 @@ function baseUrl(value: string, label: string): string {
     return url.origin;
 }
 
-function exactObject(value: unknown, keys: string[], label: string): Record<string, unknown> {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        throw new Error(`Console returned a malformed ${label}.`);
-    }
-    const object = value as Record<string, unknown>;
-    const actualKeys = Object.keys(object).sort((a, b) => a.localeCompare(b));
-    const expectedKeys = [...keys].sort((a, b) => a.localeCompare(b));
-    if (
-        actualKeys.length !== expectedKeys.length ||
-        actualKeys.some((key, index) => key !== expectedKeys[index])
-    ) {
-        throw new Error(`Console returned a ${label} with unexpected or missing fields.`);
-    }
-    return object;
-}
-
 function uuid(value: unknown, label: string): string {
-    if (
-        typeof value !== 'string' ||
-        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-    ) {
-        throw new Error(`Console returned an invalid ${label}.`);
-    }
-    return value;
+    return uuidValue(value, `Console returned an invalid ${label}.`);
 }
 
 function timestamp(value: unknown, label: string): number {
@@ -540,10 +519,7 @@ function timestamp(value: unknown, label: string): number {
 }
 
 function nonEmptyString(value: unknown, label: string): string {
-    if (typeof value !== 'string' || value.trim().length === 0) {
-        throw new Error(`Console returned an invalid ${label}.`);
-    }
-    return value;
+    return nonEmptyStringValue(value, `Console returned an invalid ${label}.`);
 }
 
 function throwIfAborted(signal: AbortSignal): void {

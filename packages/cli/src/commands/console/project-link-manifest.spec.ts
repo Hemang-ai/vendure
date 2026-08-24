@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { LINK_ID, OTHER_LINK_ID, manifest } from './console.fixtures';
 import {
     ProjectLinkManifest,
     getProjectLinkManifestPath,
@@ -13,17 +14,7 @@ import {
     writeProjectLinkManifestAtomic,
 } from './project-link-manifest';
 
-const ACCOUNT_ID = '11111111-1111-4111-8111-111111111111';
-const PROJECT_ID = '22222222-2222-4222-8222-222222222222';
-const LINK_ID = '33333333-3333-4333-8333-333333333333';
-const OTHER_LINK_ID = '44444444-4444-4444-8444-444444444444';
-
-const manifest: ProjectLinkManifest = {
-    schemaVersion: 1,
-    project: { id: PROJECT_ID, name: 'Storefront' },
-    account: { id: ACCOUNT_ID, name: 'Acme' },
-    link: { id: LINK_ID, protocolVersion: 1 },
-};
+const UUID_V7_LINK_ID = '55555555-5555-7555-8555-555555555555';
 
 const temporaryDirectories: string[] = [];
 
@@ -45,6 +36,15 @@ describe('Project Link Manifest', () => {
         expect(() => parseProjectLinkManifest(manifest, OTHER_LINK_ID)).toThrow(
             'does not match the created link request',
         );
+    });
+
+    it('accepts UUIDs without restricting the server to version 4', () => {
+        const versionSevenManifest: ProjectLinkManifest = {
+            ...manifest,
+            project: { ...manifest.project, id: UUID_V7_LINK_ID },
+        };
+
+        expect(parseProjectLinkManifest(versionSevenManifest)).toEqual(versionSevenManifest);
     });
 
     it('reports malformed JSON without including file contents', () => {
@@ -89,6 +89,19 @@ describe('Project Link Manifest', () => {
         expect(() => resolveProjectRoot(workspace, selected)).toThrow(
             'A Project Link Manifest exists outside the selected Vendure project',
         );
+        expect(resolveProjectRoot(workspace, selected, true)).toBe(selected);
+    });
+
+    it('does not inspect manifests above the Git workspace boundary', () => {
+        const outer = temporaryDirectory();
+        const workspace = path.join(outer, 'workspace');
+        fs.ensureDirSync(path.join(workspace, '.git'));
+        const selected = vendureProject(path.join(workspace, 'apps', 'server'));
+        const outerManifest = getProjectLinkManifestPath(outer);
+        fs.ensureDirSync(path.dirname(outerManifest));
+        fs.writeJsonSync(outerManifest, manifest);
+
+        expect(resolveProjectRoot(workspace, selected)).toBe(selected);
     });
 
     it('atomically writes a manifest and preserves the old file if rename fails', async () => {

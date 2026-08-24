@@ -20,6 +20,17 @@ describe('CLI Console Command E2E', () => {
         expect(result.stdout).toContain('--force');
     });
 
+    it('requires a value when --project is present', async () => {
+        testProject = createTestProject('console-project-option');
+
+        const result = await testProject.runCliCommand(['console', 'status', '--project'], {
+            expectError: true,
+        });
+
+        expect(result.exitCode).toBe(1);
+        expect(`${result.stdout}\n${result.stderr}`).toContain("option '--project <path>' argument missing");
+    });
+
     it('reports an unlinked project without contacting Console', async () => {
         testProject = createTestProject('console-status');
 
