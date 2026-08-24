@@ -148,6 +148,7 @@ export async function consoleCommand(
         return await runConsoleCommand(action, options, resolvedDependencies, abortController.signal);
     } catch (error) {
         if (interruptedExitCode !== undefined || error instanceof CommandInterruptedError) {
+            // A process signal wins so SIGTERM retains exit code 143. Prompt cancellation and external aborts use 130.
             const exitCode = interruptedExitCode ?? 130;
             resolvedDependencies.reporter.warn(
                 'Console command interrupted. No Project Link Manifest was changed.',
@@ -215,6 +216,7 @@ async function link(
     dependencies: ConsoleCommandDependencies,
     signal: AbortSignal,
 ): Promise<number> {
+    const endpoints = resolveConsoleEndpoints(dependencies.env);
     const existing = readProjectLinkManifest(projectRoot);
     if (existing.kind !== 'missing') {
         const confirmed = await confirmManifestChange('replace', existing, options, dependencies);
@@ -223,7 +225,6 @@ async function link(
         }
     }
 
-    const endpoints = resolveConsoleEndpoints(dependencies.env);
     const endpointApproval = await confirmCustomConsoleEndpoints(endpoints, options, dependencies);
     if (endpointApproval !== 'confirmed') {
         return endpointApproval === 'cancelled' ? 0 : 1;

@@ -199,7 +199,7 @@ describe('console command', () => {
         expect(test.messages.join('\n')).toContain(path.join(project, '.gitignore'));
     });
 
-    it('rewrites a monorepo root directory ignore during link', async () => {
+    it('does not rewrite a monorepo root gitignore during link', async () => {
         const { workspace, project } = vendureMonorepo({ gitignore: '.vendure/\n' });
         const fetchMock = sequenceFetch(
             jsonResponse(createResponse()),
@@ -209,13 +209,10 @@ describe('console command', () => {
 
         expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
         expect(fs.readJsonSync(getProjectLinkManifestPath(project))).toEqual(manifest);
-        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain(
-            'apps/vendure/.vendure/*',
+        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toBe('.vendure/\n');
+        expect(fs.readFileSync(path.join(project, '.gitignore'), 'utf8')).toBe(
+            '.vendure/*\n!.vendure/project.json\n',
         );
-        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toContain(
-            '!apps/vendure/.vendure/project.json',
-        );
-        expect(fs.readFileSync(path.join(workspace, '.gitignore'), 'utf8')).toMatch(/^\.vendure\/$/m);
     });
 
     it('accepts unknown API fields and version-agnostic UUIDs', async () => {
@@ -460,6 +457,23 @@ describe('console command', () => {
         );
         expect(await consoleCommand('link', { force: true }, allowed.dependencies)).toBe(0);
         expect(fs.readJsonSync(getProjectLinkManifestPath(root))).toEqual(replacement);
+    });
+
+    it('validates Console endpoints before prompting to replace a manifest', async () => {
+        const root = vendureProject();
+        fs.ensureDirSync(path.dirname(getProjectLinkManifestPath(root)));
+        fs.writeJsonSync(getProjectLinkManifestPath(root), manifest);
+        const prompt = vi.fn(() => Promise.resolve(true));
+        const test = testDependencies(root, vi.fn() as unknown as typeof fetch, {
+            env: { VENDURE_CONSOLE_LINK_URL: 'https://console.example.com' },
+            isNonInteractive: () => false,
+            prompt,
+        });
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(1);
+        expect(prompt).not.toHaveBeenCalled();
+        expect(test.messages.join('\n')).toContain('Set both VENDURE_CONSOLE_LINK_URL');
+        expect(fs.readJsonSync(getProjectLinkManifestPath(root))).toEqual(manifest);
     });
 
     it('rethrows CliCommandExit from the prompt so the CLI host owns the exit', async () => {
