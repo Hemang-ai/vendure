@@ -1092,10 +1092,17 @@ describe('Product resolver', () => {
                 ],
             };
 
-            await Promise.all([
+            // On MariaDB >= 11.6.2 (innodb_snapshot_isolation=ON by default) the losing
+            // request can be rejected with "Record has changed since last read" when both
+            // transactions update the same product row — a database-level concurrency
+            // conflict, not the bug under test. The invariant here is not that both
+            // requests succeed, but that no duplicate translation row is created and the
+            // product remains editable afterwards.
+            const results = await Promise.allSettled([
                 adminClient.query(updateProductDocument, { input }),
                 adminClient.query(updateProductDocument, { input }),
             ]);
+            expect(results.some(result => result.status === 'fulfilled')).toBe(true);
 
             const { product } = await adminClient.query(getProductWithVariantsDocument, {
                 id: createProduct.id,
@@ -1103,6 +1110,29 @@ describe('Product resolver', () => {
             productGuard.assertSuccess(product);
             const deTranslations = product.translations.filter(t => t.languageCode === LanguageCode.de);
             expect(deTranslations.length).toBe(1);
+
+            // Before the unique constraint, a duplicate pair of rows made the entity
+            // uneditable (#4884) — verify a subsequent update still lands.
+            await adminClient.query(updateProductDocument, {
+                input: {
+                    id: createProduct.id,
+                    translations: [
+                        {
+                            languageCode: LanguageCode.de,
+                            name: 'de Concurrent Potato zwei',
+                            slug: 'de-concurrent-potato',
+                            description: 'Ein Erdapfel',
+                        },
+                    ],
+                },
+            });
+            const { product: productAfter } = await adminClient.query(getProductWithVariantsDocument, {
+                id: createProduct.id,
+            });
+            productGuard.assertSuccess(productAfter);
+            const deAfter = productAfter.translations.filter(t => t.languageCode === LanguageCode.de);
+            expect(deAfter.length).toBe(1);
+            expect(deAfter[0].name).toBe('de Concurrent Potato zwei');
         });
 
         it('addOptionGroupToProduct adds an option group', async () => {
