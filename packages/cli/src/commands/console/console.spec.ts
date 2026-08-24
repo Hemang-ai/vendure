@@ -87,9 +87,46 @@ describe('console command', () => {
         expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
 
         expect(fs.readJsonSync(getProjectLinkManifestPath(root))).toEqual(manifest);
+        expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toContain('.vendure/*');
+        expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toContain('!.vendure/project.json');
         expect(fetchMock).toHaveBeenCalledTimes(3);
         expect(fetchMock.mock.calls[1][1]?.body).toBe(JSON.stringify({ pollingSecret: POLLING_SECRET }));
+        expect(test.messages.join('\n')).toContain('Updated');
+        expect(test.messages.join('\n')).toContain('.gitignore');
+    });
+
+    it('does not rewrite a gitignore that already has the Project Link rules', async () => {
+        const root = vendureProject();
+        const gitignore = [
+            'node_modules',
+            '.vendure/*',
+            '!.vendure/project.json',
+            '',
+        ].join('\n');
+        fs.writeFileSync(path.join(root, '.gitignore'), gitignore);
+        const fetchMock = sequenceFetch(
+            jsonResponse(createResponse()),
+            jsonResponse({ state: 'approved', expiresAt: expiry(), manifest }),
+        );
+        const test = testDependencies(root, fetchMock);
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
+        expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toBe(gitignore);
         expect(test.messages.join('\n')).toContain('safe to commit');
+    });
+
+    it('still writes the manifest when the project gitignore cannot be updated', async () => {
+        const root = vendureProject();
+        fs.ensureDirSync(path.join(root, '.gitignore'));
+        const fetchMock = sequenceFetch(
+            jsonResponse(createResponse()),
+            jsonResponse({ state: 'approved', expiresAt: expiry(), manifest }),
+        );
+        const test = testDependencies(root, fetchMock);
+
+        expect(await consoleCommand('link', {}, test.dependencies)).toBe(0);
+        expect(fs.readJsonSync(getProjectLinkManifestPath(root))).toEqual(manifest);
+        expect(test.messages.join('\n')).toContain('Could not update');
     });
 
     it('accepts unknown API fields and version-agnostic UUIDs', async () => {
@@ -145,6 +182,7 @@ describe('console command', () => {
         );
         expect(await consoleCommand('link', {}, denied.dependencies)).toBe(1);
         expect(fs.existsSync(getProjectLinkManifestPath(deniedRoot))).toBe(false);
+        expect(fs.existsSync(path.join(deniedRoot, '.gitignore'))).toBe(false);
 
         const malformedRoot = vendureProject();
         const malformed = testDependencies(

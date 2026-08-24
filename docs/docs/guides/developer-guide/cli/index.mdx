@@ -381,8 +381,9 @@ The v1 manifest contains identity metadata only:
 ```
 
 Commit `.vendure/project.json` so that the repository keeps its Project identity. Ignore all other `.vendure` files.
-They are reserved for machine-local state and may contain secrets. For an existing project, use these `.gitignore`
-rules:
+They are reserved for machine-local state and may contain secrets.
+
+`vendure console link` checks the project `.gitignore` file and writes these rules if they are missing:
 
 ```text
 .vendure/*

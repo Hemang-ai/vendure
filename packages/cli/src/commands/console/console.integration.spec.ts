@@ -64,6 +64,9 @@ describe('Console project-link integration', () => {
 
         expect(await consoleCommand('link', {}, dependencies)).toBe(0);
         expect(fs.readJsonSync(getProjectLinkManifestPath(projectRoot))).toEqual(manifest);
+        expect(fs.readFileSync(path.join(projectRoot, '.gitignore'), 'utf8')).toContain(
+            '!.vendure/project.json',
+        );
         expect(requestBodies).toEqual([{ pollingSecret: POLLING_SECRET }]);
         expect(messages.join('\n')).not.toContain(POLLING_SECRET);
     });

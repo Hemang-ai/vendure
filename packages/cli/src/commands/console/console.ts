@@ -4,6 +4,7 @@ import { ChildProcess, spawn } from 'node:child_process';
 import { CliCommandExit } from '../../shared/cli-command-exit';
 import { isNonInteractiveEnvironment, withInteractiveTimeout } from '../../utilities/utils';
 
+import { ensureProjectLinkGitignore } from './project-link-gitignore';
 import {
     ManifestReadResult,
     ProjectLinkManifest,
@@ -228,9 +229,7 @@ async function link(
     const manifestPath = await writeProjectLinkManifestAtomic(projectRoot, manifest);
     dependencies.reporter.success(`Linked ${manifest.project.name} to ${manifest.account.name}.`);
     dependencies.reporter.info(`Wrote ${manifestPath}`);
-    dependencies.reporter.info(
-        'This file contains identity metadata only and is safe to commit. Keep every other .vendure file ignored because it may contain machine-local secrets.',
-    );
+    reportProjectLinkGitignore(projectRoot, dependencies.reporter);
     return 0;
 }
 
@@ -260,6 +259,25 @@ function status(projectRoot: string, reporter: ConsoleReporter): number {
         ].join('\n'),
     );
     return 0;
+}
+
+function reportProjectLinkGitignore(projectRoot: string, reporter: ConsoleReporter): void {
+    const gitignore = ensureProjectLinkGitignore(projectRoot);
+    if (gitignore.kind === 'created' || gitignore.kind === 'updated') {
+        reporter.info(
+            `Updated ${gitignore.path} so .vendure/project.json can be committed and other .vendure files stay ignored.`,
+        );
+        return;
+    }
+    if (gitignore.kind === 'failed') {
+        reporter.warn(
+            `Could not update ${gitignore.path}: ${gitignore.reason}. Commit .vendure/project.json and ignore other .vendure files.`,
+        );
+        return;
+    }
+    reporter.info(
+        'This file contains identity metadata only and is safe to commit. Other .vendure files stay ignored because they may contain machine-local secrets.',
+    );
 }
 
 async function unlink(
