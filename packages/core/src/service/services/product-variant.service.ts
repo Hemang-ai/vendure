@@ -187,7 +187,11 @@ export class ProductVariantService {
             .innerJoinAndSelect('productvariant.channels', 'channel', 'channel.id = :channelId', {
                 channelId: ctx.channelId,
             })
-            .innerJoinAndSelect('productvariant.product', 'product', 'product.id = :productId', {
+            // Not selected: the join is only here to constrain the query to one Product. Selecting
+            // it would populate `productvariant.product` with a Product carrying none of its own
+            // relations, which then takes precedence over the fully-loaded one when `product` is
+            // among the requested relations.
+            .innerJoin('productvariant.product', 'product', 'product.id = :productId', {
                 productId,
             });
 
@@ -487,7 +491,7 @@ export class ProductVariantService {
         // ProductService.assignProductsToChannel().
         const product = await this.connection.getRepository(ctx, Product).findOne({
             where: { id: input.productId },
-            relations: ['channels'],
+            relations: { channels: true },
             relationLoadStrategy: 'query',
             loadEagerRelations: false,
         });
@@ -502,13 +506,11 @@ export class ProductVariantService {
                 const optionIds = input.optionIds || [];
                 let optionGroupIds: ID[] = [];
                 if (optionIds.length) {
-                    const variantOptions = await this.connection
-                        .getRepository(ctx, ProductOption)
-                        .find({
-                            where: { id: In(optionIds) },
-                            relations: ['group'],
-                            loadEagerRelations: false,
-                        });
+                    const variantOptions = await this.connection.getRepository(ctx, ProductOption).find({
+                        where: { id: In(optionIds) },
+                        relations: { group: true },
+                        loadEagerRelations: false,
+                    });
                     optionGroupIds = unique(variantOptions.map(o => o.group.id));
                 }
 
@@ -523,20 +525,14 @@ export class ProductVariantService {
                     if (optionIds.length) {
                         await Promise.all([
                             ...optionGroupIds.map(id =>
-                                this.channelService.assignToChannels(
-                                    ctx,
-                                    ProductOptionGroup,
-                                    id,
-                                    [additionalChannelId],
-                                ),
+                                this.channelService.assignToChannels(ctx, ProductOptionGroup, id, [
+                                    additionalChannelId,
+                                ]),
                             ),
                             ...optionIds.map(id =>
-                                this.channelService.assignToChannels(
-                                    ctx,
-                                    ProductOption,
-                                    id,
-                                    [additionalChannelId],
-                                ),
+                                this.channelService.assignToChannels(ctx, ProductOption, id, [
+                                    additionalChannelId,
+                                ]),
                             ),
                         ]);
                     }
@@ -892,7 +888,7 @@ export class ProductVariantService {
             where: {
                 id: In(input.productVariantIds),
             },
-            relations: ['taxCategory', 'assets'],
+            relations: { taxCategory: true, assets: true },
         });
         const priceFactor = input.priceFactor != null ? input.priceFactor : 1;
         const targetChannel = await this.connection.getEntityOrThrow(ctx, Channel, input.channelId);
@@ -1006,7 +1002,7 @@ export class ProductVariantService {
                 where: {
                     productId: variant.productId,
                 },
-                relations: ['channels'],
+                relations: { channels: true },
             });
             const productChannelsFromVariants = ([] as Channel[]).concat(
                 ...productVariants.map(pv => pv.channels),

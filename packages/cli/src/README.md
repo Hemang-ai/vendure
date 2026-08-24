@@ -9,7 +9,9 @@ The Vendure CLI supports two modes of operation:
 - **Interactive Mode**: Provides guided prompts and menus for easy use during development
 - **Non-Interactive Mode**: Allows direct command execution with arguments and options, perfect for scripting, CI/CD, and AI agents
 
-The CLI uses a structured approach where all commands are defined in an array of `CliCommandDefinition` objects, making it easy to add, remove, and modify commands.
+The CLI uses a structured approach where each built-in command owns a
+`CliCommandDefinition` next to its implementation, and external packages can
+contribute or replace commands via the CLI plugin API (`defineCliPlugin`).
 
 ## Command Definition Interface
 
@@ -215,6 +217,8 @@ npx vendure migrate -g my-migration -o ./custom/migrations
 ### Basic Command Structure
 
 ```typescript
+import { runCliCommand } from '../../shared/cli-command-exit';
+
 {
     name: 'add',
     description: 'Add a feature to your Vendure project',
@@ -234,9 +238,10 @@ npx vendure migrate -g my-migration -o ./custom/migrations
         // ... more options
     ],
     action: async (options) => {
-        const { addCommand } = await import('./add/add');
-        await addCommand(options);
-        process.exit(0);
+        return runCliCommand(async () => {
+            const { addCommand } = await import('./add/add');
+            await addCommand(options);
+        });
     },
 }
 ```
@@ -328,39 +333,151 @@ Error: Plugin "NonExistentPlugin" not found. Available plugins: MyActualPlugin, 
 
 Interactive prompts include timeout protection to prevent hanging in automated environments
 
-## Adding New Commands
+## Adding Built-in Commands
 
-To add a new command, add it to the `cliCommands` array in `packages/cli/src/commands/command-declarations.ts`:
+Each built-in command owns its definition next to its implementation:
+
+1. Create `packages/cli/src/commands/<name>/command.ts` exporting a `CliCommandDefinition`
+2. Register it in the `builtinCommandDefs` array in `packages/cli/src/commands/builtins.ts`
 
 ```typescript
-export const cliCommands: CliCommandDefinition[] = [
-    // ... existing commands ...
-    {
-        name: 'new-command',
-        description: 'Description of the new command',
-        options: [
-            {
-                short: '-o',
-                long: '--option <value>',
-                description: 'Description of the option',
-                required: false,
-            },
-        ],
-        action: async (options) => {
-            const { newCommand } = await import('./new-command/new-command');
-            await newCommand(options);
-            process.exit(0);
+// packages/cli/src/commands/hello/command.ts
+import { CliCommandDefinition } from '../../shared/cli-command-definition';
+import { runCliCommand } from '../../shared/cli-command-exit';
+
+export const helloCommandDef: CliCommandDefinition = {
+    name: 'hello',
+    description: 'Description of the new command',
+    options: [
+        {
+            short: '-o',
+            long: '--option <value>',
+            description: 'Description of the option',
+            required: false,
         },
+    ],
+    action: async options => {
+        return runCliCommand(async () => {
+            const { helloCommand } = await import('./hello');
+            await helloCommand(options);
+        });
     },
-];
+};
 ```
+
+Keep the lazy `import()` inside the action so heavy command modules are not loaded at CLI startup.
+
+## Extending the CLI with Plugins
+
+External packages can add new commands or replace built-in ones (for example a
+Cloud package overriding `vendure dev`).
+
+### 1. Author a plugin package
+
+```typescript
+import { builtinCommands, defineCliPlugin } from '@vendure/cli';
+
+export default defineCliPlugin({
+    id: '@example/vendure-cli-plugin',
+    commands: [
+        {
+            name: 'hello',
+            description: 'A new command',
+            action: async () => {
+                console.log('hello');
+                return 0;
+            },
+        },
+        {
+            name: 'dev',
+            description: 'Replaces the built-in dev command',
+            action: async (target, options) => {
+                // optional setup...
+                return builtinCommands.dev.action(target, options);
+            },
+        },
+    ],
+});
+```
+
+Declare the entry in the plugin package's `package.json`:
+
+```json
+{
+  "name": "@example/vendure-cli-plugin",
+  "vendure": {
+    "cliPlugin": "./dist/cli-plugin.js",
+    "cliCommands": ["hello", "dev"]
+  }
+}
+```
+
+`cliCommands` is optional metadata used for actionable unknown-command hints
+without loading plugin code.
+
+### 2. Discovery and explicit activation
+
+On startup the CLI:
+
+1. Resolves the project root (nearest `package.json` with `vendure.cli` or a
+   dependency on `@vendure/cli`).
+2. Scans **direct** `dependencies` / `devDependencies` / `optionalDependencies`
+   for packages that declare `vendure.cliPlugin`.
+3. **Loads only packages listed in `vendure.cli.plugins`** (explicit activation).
+4. Merges plugin commands into the registry in allowlist order (same name =
+   replace; last enabled plugin wins). A non-dim stderr notice is printed when
+   a command is replaced.
+
+Packages that declare a plugin but are not enabled are **not** executed. The CLI
+prints a one-line hint instead:
+
+```text
+2 packages provide CLI commands. Run "vendure plugins" to review them.
+```
+
+Manage activation with:
+
+```bash
+vendure plugins
+vendure plugins --json
+vendure plugins add @example/vendure-cli-plugin
+vendure plugins remove @example/vendure-cli-plugin
+```
+
+Project control in the **project** `package.json`:
+
+```json
+{
+  "vendure": {
+    "cli": {
+      "plugins": ["@example/vendure-cli-plugin"]
+    }
+  }
+}
+```
+
+- `plugins` is the allowlist (missing or empty = load nothing). Disabling a
+  plugin is simply removing it from the list.
+- In a monorepo, direct dependencies of every `package.json` from the current
+  directory up to the project root are scanned, so a plugin installed in a
+  workspace package is found even when `@vendure/cli` is hoisted.
+- Enabled packages that cannot be resolved or loaded are **skipped with an
+  error on stderr** — the CLI (including `vendure plugins remove`) stays
+  usable. `vendure plugins` reports them as `failed` with the reason.
 
 ## File Structure
 
 - `packages/cli/src/shared/cli-command-definition.ts` - Interface definitions
-- `packages/cli/src/shared/command-registry.ts` - Command registration utility
-- `packages/cli/src/commands/command-declarations.ts` - Command declarations array
+- `packages/cli/src/shared/cli-plugin.ts` - `defineCliPlugin` / `CliPlugin`
+- `packages/cli/src/shared/cli-plugin-project-config.ts` - Read/write `vendure.cli` allowlist
+- `packages/cli/src/shared/command-registry-store.ts` - Command registry (add/replace)
+- `packages/cli/src/shared/resolve-cli-plugins.ts` - Plugin discovery & loading
+- `packages/cli/src/shared/command-registry.ts` - Commander registration utility
+- `packages/cli/src/commands/builtins.ts` - Ordered list of built-in command definitions
+- `packages/cli/src/commands/<name>/command.ts` - Per-command definition (metadata + lazy action)
+- `packages/cli/src/index.ts` - Public API exports for plugin authors
 - `packages/cli/src/commands/add/add.ts` - Add command implementation with dual mode support
 - `packages/cli/src/commands/migrate/migrate.ts` - Migrate command implementation with dual mode support
+- `packages/cli/src/commands/plugins/plugins.ts` - Explicit CLI plugin activation
 - `packages/cli/src/utilities/utils.ts` - Utility functions including timeout protection
 - `packages/cli/src/cli.ts` - Main CLI entry point

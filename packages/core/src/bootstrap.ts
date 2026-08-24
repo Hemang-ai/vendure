@@ -7,7 +7,7 @@ import { getConnectionToken } from '@nestjs/typeorm';
 import { DEFAULT_COOKIE_NAME } from '@vendure/common/lib/shared-constants';
 import { Type } from '@vendure/common/lib/shared-types';
 import { satisfies } from 'semver';
-import { Connection, DataSourceOptions, EntitySubscriberInterface } from 'typeorm';
+import { DataSource, DataSourceOptions, EntitySubscriberInterface } from 'typeorm';
 import cookieSession = require('cookie-session');
 
 import { InternalServerError } from './common/error/errors';
@@ -24,12 +24,19 @@ import {
 import { runEntityMetadataModifiers } from './entity/run-entity-metadata-modifiers';
 import { setEntityIdStrategy } from './entity/set-entity-id-strategy';
 import { setMoneyStrategy } from './entity/set-money-strategy';
+import { patchTypeOrmDeepValue } from './entity/typeorm-deep-value-fix';
+import { patchTypeOrmDuplicateEagerLoad } from './entity/typeorm-duplicate-eager-load-fix';
 import { patchTypeOrmEmbeddedRelationColumns } from './entity/typeorm-embedded-relation-fix';
 import { patchTypeOrmRelationIdLoader } from './entity/typeorm-relation-id-loader-fix';
 import { validateCustomFieldsConfig } from './entity/validate-custom-fields-config';
 import { EventBus } from './event-bus';
 import { BootstrappedEvent } from './event-bus/events/bootstrapped-event';
-import { getCompatibility, getConfigurationFunction, getEntitiesFromPlugins } from './plugin/plugin-metadata';
+import {
+    flattenPlugins,
+    getCompatibility,
+    getConfigurationFunction,
+    getEntitiesFromPlugins,
+} from './plugin/plugin-metadata';
 import { getPluginStartupMessages } from './plugin/plugin-utils';
 import { setProcessContext } from './process-context/process-context';
 import { isTelemetryDisabled } from './telemetry/helpers/is-telemetry-disabled.helper';
@@ -301,6 +308,7 @@ export async function preBootstrapConfig(
     userConfig: Partial<VendureConfig>,
 ): Promise<Readonly<RuntimeVendureConfig>> {
     if (userConfig) {
+        userConfig.plugins = flattenPlugins(userConfig.plugins ?? []);
         await setConfig(userConfig);
     }
 
@@ -324,6 +332,8 @@ export async function preBootstrapConfig(
     Logger.useLogger(config.logger);
     config = await runPluginConfigurations(config);
     const entityIdStrategy = config.entityOptions.entityIdStrategy ?? config.entityIdStrategy;
+    patchTypeOrmDeepValue();
+    patchTypeOrmDuplicateEagerLoad();
     patchTypeOrmEmbeddedRelationColumns();
     patchTypeOrmRelationIdLoader();
     registerCustomEntityFields(config);
@@ -510,7 +520,7 @@ function disableSynchronize(userConfig: Readonly<RuntimeVendureConfig>): Readonl
  * @param worker
  */
 async function validateDbTablesForWorker(worker: INestApplicationContext) {
-    const connection: Connection = worker.get(getConnectionToken());
+    const connection: DataSource = worker.get(getConnectionToken());
     await new Promise<void>(async (resolve, reject) => {
         const checkForTables = async (): Promise<boolean> => {
             try {
