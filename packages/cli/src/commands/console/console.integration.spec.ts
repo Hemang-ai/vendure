@@ -82,7 +82,7 @@ async function respondToProjectLinkRequest(
         requestBodies.push(body);
     }
     response.setHeader('Content-Type', 'application/json');
-    if (request.method === 'POST' && request.url === '/project-links') {
+    if (request.method === 'POST' && request.url === '/v1/project-links') {
         response.end(
             JSON.stringify({
                 id: LINK_ID,
@@ -95,7 +95,7 @@ async function respondToProjectLinkRequest(
         );
         return;
     }
-    if (request.method === 'POST' && request.url === `/project-links/${LINK_ID}/poll`) {
+    if (request.method === 'POST' && request.url === `/v1/project-links/${LINK_ID}/poll`) {
         response.end(
             JSON.stringify({
                 state: 'approved',

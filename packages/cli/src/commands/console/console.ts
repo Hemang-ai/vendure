@@ -19,6 +19,7 @@ import { nonEmptyString, objectValue, uuid } from './project-link-validation';
 
 const DEFAULT_CONSOLE_URL = 'https://console.vendure.io';
 const DEFAULT_CONSOLE_API_URL = 'https://api.vendure.io';
+const PROJECT_LINKS_PATH = '/v1/project-links';
 const POLL_INTERVAL_MS = 2_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 64 * 1024;
@@ -393,7 +394,7 @@ async function createProjectLink(
     signal: AbortSignal,
 ): Promise<ProjectLinkRequest> {
     const value = await requestJson(
-        `${endpoints.apiUrl}/project-links`,
+        `${endpoints.apiUrl}${PROJECT_LINKS_PATH}`,
         { method: 'POST' },
         dependencies,
         signal,
@@ -467,7 +468,7 @@ async function pollWithRetry(
         }
         try {
             const value = await requestJson(
-                `${endpoints.apiUrl}/project-links/${encodeURIComponent(request.id)}/poll`,
+                `${endpoints.apiUrl}${PROJECT_LINKS_PATH}/${encodeURIComponent(request.id)}/poll`,
                 {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

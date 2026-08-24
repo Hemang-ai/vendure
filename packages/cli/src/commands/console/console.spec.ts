@@ -148,6 +148,10 @@ describe('console command', () => {
         expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toContain('.vendure/*');
         expect(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')).toContain('!.vendure/project.json');
         expect(fetchMock).toHaveBeenCalledTimes(3);
+        expect(fetchMock.mock.calls[0][0]).toBe('http://localhost:3001/v1/project-links');
+        expect(fetchMock.mock.calls[1][0]).toBe(
+            `http://localhost:3001/v1/project-links/${LINK_ID}/poll`,
+        );
         expect(fetchMock.mock.calls[0][1]?.redirect).toBe('error');
         expect(fetchMock.mock.calls[1][1]?.redirect).toBe('error');
         expect(fetchMock.mock.calls[1][1]?.body).toBe(JSON.stringify({ pollingSecret: POLLING_SECRET }));
