@@ -56,6 +56,19 @@ export type BaseTypedCustomFieldConfig<T extends CustomFieldType, C extends Cust
     unique?: boolean;
     /**
      * @description
+     * Creates a database index for this custom field. Use this for custom fields
+     * which are frequently used to filter or sort large data sets.
+     *
+     * Indexes are only supported for non-list, non-struct fields. MySQL and
+     * MariaDB also do not support indexes on `text` or `localeText` custom fields
+     * because those values are stored as `longtext` without an index prefix length.
+     * Invalid combinations are rejected during bootstrap.
+     *
+     * @since 3.8.0
+     */
+    index?: boolean;
+    /**
+     * @description
      * The permission(s) required to read or write to this field.
      * If the user has at least one of these permissions, they will be
      * able to access the field.
@@ -103,17 +116,6 @@ export type TypedCustomSingleFieldConfig<
     C extends CustomField,
 > = BaseTypedCustomFieldConfig<T, C> & {
     list?: false;
-    /**
-     * @description
-     * Creates a database index for this custom field. Use this for custom fields
-     * which are frequently used to filter or sort large data sets.
-     *
-     * Struct fields cannot be indexed because their database representation is
-     * not portable across the supported database engines.
-     *
-     * @since 3.8.0
-     */
-    index?: T extends 'struct' ? never : boolean;
     defaultValue?: DefaultValueType<T>;
     validate?: (
         value: DefaultValueType<T>,

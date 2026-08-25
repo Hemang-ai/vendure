@@ -86,7 +86,7 @@ function getRelationTargetName(type: RelationMetadataArgs['type']): string | und
 /**
  * Dynamically add columns to the custom field entity based on the CustomFields config.
  */
-function registerCustomFieldsForEntity(
+export function registerCustomFieldsForEntity(
     config: VendureConfig,
     entityName: keyof CustomFields,
     // eslint-disable-next-line @typescript-eslint/prefer-function-type
@@ -98,7 +98,7 @@ function registerCustomFieldsForEntity(
     if (customFields) {
         for (const customField of customFields) {
             const { name, list, defaultValue, nullable } = customField;
-            const indexed = 'index' in customField && customField.index === true;
+            const indexed = customField.index === true;
             const instance = new ctor();
             const registerColumn = () => {
                 if (customField.type === 'relation') {

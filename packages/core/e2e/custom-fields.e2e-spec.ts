@@ -272,17 +272,17 @@ describe('Custom fields', () => {
         await server.destroy();
     });
 
-    // #3444 — indexed custom fields should be represented in database metadata
+    // #3444
     it('creates a database index for an indexed custom field', () => {
         const connection = server.app.get(TransactionalConnection).rawConnection;
         const productMetadata = connection.getMetadata(Product);
-        const indexedCustomField = productMetadata.indices.find(index =>
-            index.columns.some(column => column.propertyPath === 'customFields.indexedString'),
+        const indexedCustomFields = productMetadata.indices.filter(
+            index =>
+                index.columns.length === 1 && index.columns[0].propertyPath === 'customFields.indexedString',
         );
 
-        expect(indexedCustomField?.columns.map(column => column.propertyPath)).toEqual([
-            'customFields.indexedString',
-        ]);
+        expect(indexedCustomFields).toHaveLength(1);
+        expect(indexedCustomFields[0].isUnique).toBe(false);
     });
 
     it('globalSettings.serverConfig.customFieldConfig', async () => {
