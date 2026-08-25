@@ -1,11 +1,10 @@
 /* eslint-disable @typescript-eslint/ban-types */
-import { CustomFieldType } from '@vendure/common/lib/shared-types';
+import { CustomFieldType, Type } from '@vendure/common/lib/shared-types';
 import { assertNever } from '@vendure/common/lib/shared-utils';
 import {
     Column,
     ColumnOptions,
     ColumnType,
-    DataSourceOptions,
     getMetadataArgsStorage,
     Index,
     JoinColumn,
@@ -20,8 +19,12 @@ import { DateUtils } from 'typeorm/util/DateUtils';
 import { CustomFieldConfig, CustomFields } from '../config/custom-field/custom-field-types';
 import { Logger } from '../config/logger/vendure-logger';
 import { VendureConfig } from '../config/vendure-config';
+import { getDatabaseType, VendureDatabaseType } from '../connection/database-type';
 
 import { EntityId } from './entity-id.decorator';
+import { EncryptedFieldTransformer } from './value-transformers';
+
+import { coreEntitiesMap } from './entities';
 
 /**
  * The maximum length of the "length" argument of a MySQL varchar column.
@@ -47,8 +50,16 @@ const MAX_STRING_LENGTH = 65535;
  * translation entities as the target of a `translations` relation, the same signal
  * `registerCustomEntityFields` uses to locate the translation type.
  */
-export function getEntityNamesWithCustomFields(): string[] {
+export function getEntityNamesWithCustomFields(entities: Array<Type<any>>): string[] {
+    // Scope to the entities actually registered with this server. The global metadata storage
+    // holds every entity imported anywhere in the process — including ones not registered here
+    // (a second server in the same process, or an imported-but-uninstalled plugin) — which would
+    // otherwise seed phantom `config.customFields` keys.
+    const registeredEntityNames = new Set(entities.map(entity => entity.name));
     const metadataArgsStorage = getMetadataArgsStorage();
+    // The translation-entity exclusion set is intentionally built from the process-global metadata:
+    // it is only ever used to exclude, and the candidate names are already filtered to
+    // `registeredEntityNames` below, so a superset here is harmless.
     const translationEntityNames = new Set(
         metadataArgsStorage.relations
             .filter(relation => relation.propertyName === 'translations')
@@ -58,6 +69,7 @@ export function getEntityNamesWithCustomFields(): string[] {
     const names = metadataArgsStorage.embeddeds
         .filter(embedded => embedded.propertyName === 'customFields')
         .map(embedded => (typeof embedded.target === 'string' ? embedded.target : embedded.target.name))
+        .filter(name => registeredEntityNames.has(name))
         .filter(name => !translationEntityNames.has(name));
     return Array.from(new Set(names));
 }
@@ -94,22 +106,82 @@ export function registerCustomFieldsForEntity(
     translation = false,
 ) {
     const customFields = config.customFields && config.customFields[entityName];
-    const dbEngine = config.dbConnectionOptions.type;
+    const dbEngine = getDatabaseType(config.dbConnectionOptions);
     if (customFields) {
         for (const customField of customFields) {
             const { name, list, defaultValue, nullable } = customField;
             const indexed = customField.index === true;
+            if (customField.secret === true) {
+                // Validate secret-field constraints that apply regardless of the underlying storage,
+                // before branching on the field type. Otherwise an unsupported type such as
+                // `relation` is silently registered without encryption or redaction.
+                if (customField.type !== 'string' && customField.type !== 'text') {
+                    throw new Error(
+                        `ERROR: The custom field "${customField.name}" has "secret: true", which ` +
+                            'is only supported on "string" and "text" fields.',
+                    );
+                }
+                if (list) {
+                    throw new Error(
+                        `ERROR: The custom field "${customField.name}" cannot combine "secret: true" ` +
+                            'with "list: true".',
+                    );
+                }
+                if (defaultValue !== undefined) {
+                    throw new Error(
+                        `ERROR: The custom field "${customField.name}" cannot combine "secret: true" ` +
+                            'with a "defaultValue", because a column default would be stored unencrypted.',
+                    );
+                }
+            }
             const instance = new ctor();
             const registerColumn = () => {
                 if (customField.type === 'relation') {
+                    const { cascade, onDelete, onUpdate, eager } = customField;
+                    const relatedEntityName = customField.entity.name;
+
+                    if (onDelete === 'CASCADE' && relatedEntityName in coreEntitiesMap && list !== true) {
+                        Logger.warn(
+                            [
+                                `WARNING: You have set "onDelete: 'CASCADE'" on the custom field relation "${String(entityName)}.${name}" to the "${relatedEntityName}" entity.`,
+                                `Deleting "${relatedEntityName}" rows will also delete the "${String(entityName)}" rows that reference them.`,
+                                `"${relatedEntityName}" is a core Vendure entity, so make sure this is what you intend.`,
+                            ].join('\n'),
+                        );
+                    }
+                    if (
+                        (cascade === true ||
+                            (Array.isArray(cascade) &&
+                                (cascade.includes('remove') || cascade.includes('soft-remove')))) &&
+                        relatedEntityName in coreEntitiesMap &&
+                        list !== true
+                    ) {
+                        const cascadeSetting =
+                            cascade === true
+                                ? `cascade: true (which includes 'remove' and 'soft-remove')`
+                                : `cascade: ${JSON.stringify(cascade)}`;
+                        Logger.warn(
+                            [
+                                `WARNING: You have set "${cascadeSetting}" on the custom field relation "${String(entityName)}.${name}" to the "${relatedEntityName}" entity.`,
+                                `Removing "${String(entityName)}" rows with TypeORM's remove() or softRemove() will also remove the "${relatedEntityName}" rows they reference.`,
+                                `"${relatedEntityName}" is a core Vendure entity, so make sure this is what you intend.`,
+                            ].join('\n'),
+                        );
+                    }
                     if (customField.list) {
                         ManyToMany(type => customField.entity, customField.inverseSide, {
-                            eager: customField.eager,
+                            cascade,
+                            onDelete,
+                            onUpdate,
+                            eager,
                         })(instance, name);
                         JoinTable()(instance, name);
                     } else {
                         ManyToOne(type => customField.entity, customField.inverseSide, {
-                            eager: customField.eager,
+                            cascade,
+                            onDelete,
+                            onUpdate,
+                            eager,
                         })(instance, name);
                         JoinColumn()(instance, name);
                         // Expose the foreign key as an id property (e.g. "ownerId"), which maps
@@ -160,6 +232,28 @@ export function registerCustomFieldsForEntity(
                     ) {
                         options.precision = 6;
                     }
+                    if (customField.secret === true) {
+                        if (customField.unique === true) {
+                            throw new Error(
+                                `ERROR: The custom field "${customField.name}" cannot combine "secret: true" ` +
+                                    'with "unique: true", because encrypted values cannot be uniquely indexed.',
+                            );
+                        }
+                        if (customField.type === 'string' && customField.length != null) {
+                            throw new Error(
+                                `ERROR: The custom field "${customField.name}" cannot combine "secret: true" ` +
+                                    'with an explicit "length", because encrypted values are stored as unbounded text.',
+                            );
+                        }
+                        // Ciphertext is longer than the plaintext and variable in size, so it is
+                        // stored as unbounded text and encrypted/decrypted via the configured strategy.
+                        options.type = getColumnType(dbEngine, 'text', false);
+                        delete options.length;
+                        delete options.default;
+                        options.transformer = new EncryptedFieldTransformer(
+                            () => config.systemOptions?.encryptionStrategy,
+                        );
+                    }
                     Column(options)(instance, name);
                     if ((dbEngine === 'mysql' || dbEngine === 'mariadb') && customField.unique === true) {
                         // The MySQL driver seems to work differently and will only apply a unique
@@ -204,7 +298,7 @@ export function registerCustomFieldsForEntity(
     }
 }
 
-function formatDefaultDatetime(dbEngine: DataSourceOptions['type'], datetime: any): Date | string {
+function formatDefaultDatetime(dbEngine: VendureDatabaseType, datetime: any): Date | string {
     if (!datetime) {
         return datetime;
     }
@@ -221,7 +315,7 @@ function formatDefaultDatetime(dbEngine: DataSourceOptions['type'], datetime: an
 }
 
 function getColumnType(
-    dbEngine: DataSourceOptions['type'],
+    dbEngine: VendureDatabaseType,
     type: Exclude<CustomFieldType, 'relation'>,
     isList: boolean,
 ): ColumnType {
@@ -284,7 +378,7 @@ function getColumnType(
     return 'varchar';
 }
 
-function getDefault(customField: CustomFieldConfig, dbEngine: DataSourceOptions['type']) {
+function getDefault(customField: CustomFieldConfig, dbEngine: VendureDatabaseType) {
     const { name, type, list, defaultValue, nullable } = customField;
     if (list && defaultValue) {
         if (dbEngine === 'mysql') {

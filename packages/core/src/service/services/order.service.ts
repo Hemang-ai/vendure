@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import {
     AddPaymentToOrderResult,
     ApplyCouponCodeResult,
@@ -81,6 +81,7 @@ import { ListQueryOptions } from '../../common/types/common-types';
 import { assertFound, idsAreEqual } from '../../common/utils';
 import { ConfigService } from '../../config/config.service';
 import { Logger } from '../../config/logger/vendure-logger';
+import { findOptionsArrayToObject } from '../../connection/find-options-array-to-object';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Channel } from '../../entity/channel/channel.entity';
 import { Customer } from '../../entity/customer/customer.entity';
@@ -96,9 +97,11 @@ import { Promotion } from '../../entity/promotion/promotion.entity';
 import { Refund } from '../../entity/refund/refund.entity';
 import { Session } from '../../entity/session/session.entity';
 import { ShippingLine } from '../../entity/shipping-line/shipping-line.entity';
+import { ShippingMethod } from '../../entity/shipping-method/shipping-method.entity';
 import { Surcharge } from '../../entity/surcharge/surcharge.entity';
 import { User } from '../../entity/user/user.entity';
 import { EventBus } from '../../event-bus/event-bus';
+import { ChangeChannelEvent } from '../../event-bus/events/change-channel-event';
 import { CouponCodeEvent } from '../../event-bus/events/coupon-code-event';
 import { OrderEvent } from '../../event-bus/events/order-event';
 import { OrderLineEvent } from '../../event-bus/events/order-line-event';
@@ -142,7 +145,7 @@ import { StockLevelService } from './stock-level.service';
  */
 @Injectable()
 @Instrument()
-export class OrderService {
+export class OrderService implements OnApplicationBootstrap {
     constructor(
         private connection: TransactionalConnection,
         private configService: ConfigService,
@@ -168,6 +171,28 @@ export class OrderService {
         private translator: TranslatorService,
         private stockLevelService: StockLevelService,
     ) {}
+
+    /** @internal */
+    onApplicationBootstrap() {
+        // Unassigning a ShippingMethod from a channel leaves a stale ShippingLine on
+        // active orders in that channel, which can no longer use the method. The
+        // handler blocks so the cleanup shares the removal's transaction and a failure
+        // rolls it back. (Deletion is intentionally left alone: a soft-deleted method
+        // stays resolvable on existing orders — see issue #716.)
+        this.eventBus.registerBlockingEventHandler({
+            id: 'order-service-remove-unassigned-shipping-method-from-active-orders',
+            event: ChangeChannelEvent,
+            handler: async event => {
+                if (event.entityType === ShippingMethod && event.type === 'removed') {
+                    await this.removeShippingMethodFromActiveOrders(
+                        event.ctx,
+                        event.entity.id,
+                        event.channelIds,
+                    );
+                }
+            },
+        });
+    }
 
     /**
      * @description
@@ -261,7 +286,7 @@ export class OrderService {
             .map(r => r.replace('lines.', ''));
 
         qb.setFindOptions({
-            relations: orderRelations,
+            relations: findOptionsArrayToObject<Order>(orderRelations),
             relationLoadStrategy: 'query',
         })
             .leftJoin('order.channels', 'channel')
@@ -279,7 +304,7 @@ export class OrderService {
                 const linesQb = this.connection.getRepository(ctx, OrderLine).createQueryBuilder('line');
                 linesQb
                     .setFindOptions({
-                        relations: lineRelations,
+                        relations: findOptionsArrayToObject<OrderLine>(lineRelations),
                     })
                     .where('line.orderId = :orderId', { orderId })
                     .addOrderBy('line.createdAt', 'ASC')
@@ -311,7 +336,7 @@ export class OrderService {
         relations?: RelationPaths<Order>,
     ): Promise<Order | undefined> {
         const order = await this.connection.getRepository(ctx, Order).findOne({
-            relations: ['customer'],
+            relations: { customer: true },
             where: {
                 code: orderCode,
             },
@@ -362,7 +387,7 @@ export class OrderService {
      */
     getOrderPayments(ctx: RequestContext, orderId: ID): Promise<Payment[]> {
         return this.connection.getRepository(ctx, Payment).find({
-            relations: ['refunds'],
+            relations: { refunds: true },
             where: {
                 order: { id: orderId } as any,
             },
@@ -378,7 +403,7 @@ export class OrderService {
             where: {
                 order: { id: orderId },
             },
-            relations: ['lines', 'payment', 'refund', 'surcharges'],
+            relations: { lines: true, payment: true, refund: true, surcharges: true },
         });
     }
 
@@ -399,7 +424,7 @@ export class OrderService {
             where: {
                 aggregateOrderId: order.id,
             },
-            relations: ['channels'],
+            relations: { channels: true },
         });
     }
 
@@ -408,7 +433,10 @@ export class OrderService {
             ? undefined
             : this.connection
                   .getRepository(ctx, Order)
-                  .findOne({ where: { id: order.aggregateOrderId }, relations: ['channels', 'lines'] })
+                  .findOne({
+                      where: { id: order.aggregateOrderId },
+                      relations: { channels: true, lines: true },
+                  })
                   .then(result => result ?? undefined);
     }
 
@@ -1831,7 +1859,7 @@ export class OrderService {
             where: {
                 id: In(input.lines.map(l => l.orderLineId)),
             },
-            relations: ['productVariant'],
+            relations: { productVariant: true },
         });
 
         for (const line of lines) {
@@ -2084,9 +2112,10 @@ export class OrderService {
         const orderToDelete =
             orderOrId instanceof Order
                 ? orderOrId
-                : await this.connection
-                      .getRepository(ctx, Order)
-                      .findOneOrFail({ where: { id: orderOrId }, relations: ['lines', 'shippingLines'] });
+                : await this.connection.getRepository(ctx, Order).findOneOrFail({
+                      where: { id: orderOrId },
+                      relations: { lines: true, shippingLines: true },
+                  });
         // If there is a Session referencing the Order to be deleted, we must first remove that
         // reference in order to avoid a foreign key error. See https://github.com/vendurehq/vendure/issues/1454
         const sessions = await this.connection
@@ -2311,6 +2340,23 @@ export class OrderService {
      * @description
      * Applies promotions, taxes and shipping to the Order. If the `updatedOrderLines` argument is passed in,
      * then all of those OrderLines will have their prices re-calculated using the configured {@link OrderItemPriceCalculationStrategy}.
+     *
+     * Pass `options.recalculateShipping: false` to leave the Order's existing ShippingLine prices
+     * untouched. This is needed when the Order's ShippingMethods cannot be resolved in the current
+     * Channel, e.g. for a seller Order whose ShippingLines were already calculated on the aggregate
+     * Order. The existing shipping Promotion adjustments are then left in place too, unless
+     * `options.recalculateShippingPromotions: true` is also passed, which revalidates them against
+     * the Promotions of the current Channel.
+     *
+     * Note that `recalculateShipping: false` also leaves the ShippingLine's `taxLines` and
+     * `listPriceIncludesTax` as they were, since both are produced by the ShippingMethod's
+     * {@link ShippingCalculator} and that is only run when the prices are recalculated. The
+     * OrderLine taxes are still recalculated for the current Channel's tax zone, so an Order priced
+     * this way in a Channel which resolves to a different tax zone, or which has a different
+     * `pricesIncludeTax` setting, ends up with its lines and its shipping taxed on different bases.
+     * The built-in `defaultShippingCalculator` takes its tax rate from a ShippingMethod arg
+     * rather than from the tax zone, so this only affects the `includesTax: 'auto'` setting and
+     * custom ShippingCalculators which derive their tax rate from the RequestContext.
      */
     async applyPriceAdjustments(
         ctx: RequestContext,
@@ -2510,6 +2556,81 @@ export class OrderService {
                 .relation('shippingLines')
                 .of(order)
                 .add(idToAdd);
+        }
+    }
+
+    private async removeShippingMethodFromActiveOrders(
+        ctx: RequestContext,
+        shippingMethodId: ID,
+        channelIds: ID[],
+    ) {
+        // Orders are recalculated serially inside the removal transaction, holding
+        // write locks for its duration. A bulk unassign touching many active orders
+        // may trip the blocking-handler slow-warning; a post-commit job queue would
+        // scale better but would trade away the atomic rollback guarantee.
+        for (const channelId of channelIds) {
+            const channel = await this.channelService.findOne(ctx, channelId);
+            if (!channel) {
+                continue;
+            }
+            // Scope to the affected channel so applyPriceAdjustments uses its
+            // promotions/taxes/currency, not those of the triggering channel.
+            const orderCtx = ctx.copy(channel);
+
+            const affectedOrders = await this.connection
+                .getRepository(orderCtx, Order)
+                .createQueryBuilder('order')
+                .innerJoin('order.channels', 'channel', 'channel.id = :channelId', {
+                    channelId,
+                })
+                .innerJoin(
+                    'order.shippingLines',
+                    'shippingLine',
+                    'shippingLine.shippingMethodId = :shippingMethodId',
+                    { shippingMethodId },
+                )
+                .where('order.active = :active', { active: true })
+                .getMany();
+
+            if (affectedOrders.length === 0) {
+                continue;
+            }
+
+            const orders = await this.connection.getRepository(orderCtx, Order).find({
+                where: { id: In(affectedOrders.map(o => o.id)) },
+                relations: {
+                    lines: { productVariant: { productVariantPrices: true } },
+                    shippingLines: true,
+                    surcharges: true,
+                },
+            });
+
+            for (const order of orders) {
+                // Remove the lines manually: the method is still visible via the
+                // channel-scoped ctx inside this transaction, so applyShipping would
+                // not detect the removal on its own.
+                const shippingLinesToRemove = order.shippingLines.filter(sl =>
+                    idsAreEqual(sl.shippingMethodId, shippingMethodId),
+                );
+                if (shippingLinesToRemove.length) {
+                    const shippingLineIdsToRemove = shippingLinesToRemove.map(sl => sl.id);
+                    // Detach order lines first to avoid an FK violation on delete.
+                    for (const line of order.lines) {
+                        if (
+                            line.shippingLineId &&
+                            shippingLineIdsToRemove.some(id => idsAreEqual(id, line.shippingLineId))
+                        ) {
+                            line.shippingLine = undefined;
+                            line.shippingLineId = undefined;
+                        }
+                    }
+                    await this.connection.getRepository(orderCtx, ShippingLine).remove(shippingLinesToRemove);
+                }
+                order.shippingLines = order.shippingLines.filter(
+                    sl => !idsAreEqual(sl.shippingMethodId, shippingMethodId),
+                );
+                await this.applyPriceAdjustments(orderCtx, order);
+            }
         }
     }
 }

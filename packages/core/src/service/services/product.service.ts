@@ -22,6 +22,7 @@ import { Instrument } from '../../common/instrument-decorator';
 import { ListQueryOptions } from '../../common/types/common-types';
 import { Translated } from '../../common/types/locale-types';
 import { assertFound, idsAreEqual } from '../../common/utils';
+import { findOptionsArrayToObject } from '../../connection/find-options-array-to-object';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Channel } from '../../entity/channel/channel.entity';
 import { FacetValue } from '../../entity/facet-value/facet-value.entity';
@@ -155,7 +156,7 @@ export class ProductService {
         const qb = this.connection
             .getRepository(ctx, Product)
             .createQueryBuilder('product')
-            .setFindOptions({ relations: (relations && false) || this.relations });
+            .setFindOptions({ relations: findOptionsArrayToObject<Product>(this.relations) });
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         FindOptionsUtils.joinEagerRelations(qb, qb.alias, qb.expressionMap.mainAlias!.metadata);
         return qb
@@ -188,7 +189,7 @@ export class ProductService {
             .getRepository(ctx, Product)
             .findOne({
                 where: { id: productId },
-                relations: ['facetValues'],
+                relations: { facetValues: true },
             })
             .then(product => {
                 if (!product) {
@@ -330,7 +331,7 @@ export class ProductService {
     ): Promise<Array<Translated<Product>>> {
         const productsWithVariants = await this.connection.getRepository(ctx, Product).find({
             where: { id: In(input.productIds) },
-            relations: ['variants', 'assets', 'optionGroups', 'optionGroups.options'],
+            relations: { variants: true, assets: true, optionGroups: { options: true } },
             relationLoadStrategy: 'query',
             loadEagerRelations: false,
         });
@@ -380,7 +381,7 @@ export class ProductService {
     ): Promise<Array<Translated<Product>>> {
         const productsWithVariants = await this.connection.getRepository(ctx, Product).find({
             where: { id: In(input.productIds) },
-            relations: ['variants', 'optionGroups', 'optionGroups.options'],
+            relations: { variants: true, optionGroups: { options: true } },
             relationLoadStrategy: 'query',
             loadEagerRelations: false,
         });

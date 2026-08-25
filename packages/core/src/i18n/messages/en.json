@@ -54,6 +54,8 @@
     "regex-filter-pattern-too-long": "The regex filter pattern exceeds the maximum allowed length of { max } characters",
     "regex-filter-pattern-unsafe": "The regex filter pattern is not allowed as it may cause excessive resource consumption",
     "regex-filter-pattern-unsupported-syntax": "The regex filter pattern uses syntax that is not supported by the safe regex engine (such as lookaround or backreferences)",
+    "secret-custom-field-value-required": "A value must be provided for the secret field \"{ name }\"",
+    "secret-value-required": "A value must be provided for the secret argument \"{ name }\"",
     "stockonhand-cannot-be-negative": "stockOnHand cannot be a negative value",
     "superadmin-must-have-superadmin-role": "Cannot remove the SuperAdmin role from the sole SuperAdmin",
     "target-customer-not-assigned-to-order-channels": "The target Customer is not assigned to the same Channels as the Order. Missing channels IDs: { missingChannelIds }",

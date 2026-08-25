@@ -1,6 +1,6 @@
 {
     "name": "@vendure/core",
-    "version": "3.7.1",
+    "version": "3.7.2",
     "description": "A modern, headless ecommerce framework",
     "repository": {
         "type": "git",
@@ -28,6 +28,8 @@
         "e2e": "cross-env PACKAGE=core vitest --config ../../e2e-common/vitest.config.mts --run",
         "e2e:watch": "cross-env PACKAGE=core vitest --config ../../e2e-common/vitest.config.mts",
         "bench": "cross-env PACKAGE=core vitest --config ../../e2e-common/vitest.config.bench.ts --run",
+        "i18n:extract": "node ./scripts/translate/i18n-tool.mjs extract",
+        "i18n:apply": "node ./scripts/translate/i18n-tool.mjs apply",
         "ci": "npm run build"
     },
     "publishConfig": {
@@ -47,9 +49,9 @@
         "@nestjs/core": "^11.0.12",
         "@nestjs/graphql": "~13.1.0",
         "@nestjs/platform-express": "^11.0.12",
-        "@nestjs/typeorm": "^11.0.0",
+        "@nestjs/typeorm": "^11.0.1",
         "@types/express": "^5.0.1",
-        "@vendure/common": "3.7.1",
+        "@vendure/common": "3.7.2",
         "bcrypt": "^6.0.0",
         "cookie-session": "^2.1.0",
         "cron-time-generator": "^2.0.3",
@@ -58,7 +60,7 @@
         "csv-parse": "^6.2.1",
         "dataloader": "^2.2.3",
         "express": "^5.1.0",
-        "file-type": "^19.0.0",
+        "file-type": "^21.3.1",
         "fs-extra": "^11.2.0",
         "graphql": "^16.11.0",
         "graphql-scalars": "^1.24.2",
@@ -92,7 +94,7 @@
         "@types/node": "^18.19.23",
         "@types/prompts": "^2.4.9",
         "@types/semver": "^7.5.8",
-        "better-sqlite3": "^11.6.0",
+        "better-sqlite3": "^12.11.1",
         "chokidar": "^3.6.0",
         "glob": "^10.3.10",
         "ioredis": "^5.3.2",

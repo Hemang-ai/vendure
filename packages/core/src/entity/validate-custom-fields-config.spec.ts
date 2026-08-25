@@ -199,6 +199,18 @@ describe('validateCustomFieldsConfig()', () => {
         ]);
     });
 
+    it('rejects an index on a secret field', () => {
+        const config: CustomFields = {
+            Product: [{ name: 'token', type: 'string', secret: true, index: true }],
+        };
+        const result = validateCustomFieldsConfig(config, allEntities, 'postgres');
+
+        expect(result.valid).toBe(false);
+        expect(result.errors).toEqual([
+            'Product entity custom field "token" cannot be indexed because secret fields are stored as encrypted unbounded text',
+        ]);
+    });
+
     it.each(['mysql', 'mariadb'] as const)(
         'rejects indexes and unique constraints on text fields for %s',
         dbEngine => {

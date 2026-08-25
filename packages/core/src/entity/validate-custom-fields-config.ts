@@ -35,6 +35,11 @@ function assertValidIndexConfiguration(
     const errors: string[] = [];
     for (const field of customFields) {
         if (field.index === true) {
+            if (field.secret === true) {
+                errors.push(
+                    `${entityName} entity custom field "${field.name}" cannot be indexed because secret fields are stored as encrypted unbounded text`,
+                );
+            }
             if (field.list === true) {
                 errors.push(
                     `${entityName} entity custom field "${field.name}" cannot be indexed because list fields are stored as JSON`,
@@ -48,6 +53,7 @@ function assertValidIndexConfiguration(
         }
         if (
             (field.index === true || field.unique === true) &&
+            field.secret !== true &&
             (field.type === 'text' || field.type === 'localeText') &&
             (dbEngine === 'mysql' || dbEngine === 'mariadb')
         ) {

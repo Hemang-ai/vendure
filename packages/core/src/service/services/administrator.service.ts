@@ -20,6 +20,7 @@ import {
 import { ListQueryOptions } from '../../common/types/common-types';
 import { assertFound, idsAreEqual, normalizeEmailAddress } from '../../common/utils';
 import { API_KEY_AUTH_STRATEGY_NAME, ConfigService, Logger } from '../../config';
+import { findOptionsArrayToObject } from '../../connection/find-options-array-to-object';
 import { TransactionalConnection } from '../../connection/transactional-connection';
 import { Administrator } from '../../entity/administrator/administrator.entity';
 import { ApiKey } from '../../entity/api-key/api-key.entity';
@@ -150,7 +151,9 @@ export class AdministratorService {
         return this.connection
             .getRepository(ctx, Administrator)
             .findOne({
-                relations: relations ?? ['avatar', 'user', 'user.roles'],
+                relations: findOptionsArrayToObject<Administrator>(
+                    relations ?? ['avatar', 'user', 'user.roles'],
+                ),
                 where: {
                     id: administratorId,
                     deletedAt: IsNull(),
@@ -171,7 +174,7 @@ export class AdministratorService {
         return this.connection
             .getRepository(ctx, Administrator)
             .findOne({
-                relations: relations ?? ['avatar'],
+                relations: findOptionsArrayToObject<Administrator>(relations ?? ['avatar']),
                 where: {
                     user: { id: userId },
                     deletedAt: IsNull(),
@@ -497,7 +500,7 @@ export class AdministratorService {
     private async isSoleSuperadmin(ctx: RequestContext, id: ID) {
         const superAdminRole = await this.roleService.getSuperAdminRole(ctx);
         const allAdmins = await this.connection.getRepository(ctx, Administrator).find({
-            relations: ['user', 'user.roles'],
+            relations: { user: { roles: true } },
             where: { deletedAt: IsNull() },
         });
         const superAdmins = allAdmins.filter(

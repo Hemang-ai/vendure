@@ -11,6 +11,7 @@ import {
 
 import {
     BaseTypedCustomFieldConfig,
+    CUSTOM_FIELDS_INPUT_TYPE_SUFFIX,
     CustomFieldConfig,
     CustomFields,
     isNonListRelationCustomField,
@@ -93,11 +94,13 @@ export function addGraphQLCustomFields(
         );
         const writeableLocalizedFields = localizedFields.filter(field => !field.readonly);
         const writeableNonLocalizedFields = nonLocalizedFields.filter(field => !field.readonly);
+        // `secret` fields are stored encrypted, so filtering or sorting by them at the SQL level is
+        // meaningless — they are excluded from the generated filter/sort inputs.
         const sortableFields = customEntityFields.filter(
-            field => field.list !== true && field.type !== 'struct',
+            field => field.list !== true && field.type !== 'struct' && field.secret !== true,
         );
         const filterableFields = customEntityFields.filter(
-            field => field.type !== 'relation' && field.type !== 'struct',
+            field => field.type !== 'relation' && field.type !== 'struct' && field.secret !== true,
         );
         const structCustomFields = customEntityFields.filter(
             (f): f is StructCustomFieldConfig => f.type === 'struct',
@@ -161,7 +164,7 @@ export function addGraphQLCustomFields(
 
         if (hasCreateInputType) {
             if (writeableNonLocalizedFields.length) {
-                const createCustomFieldsInputType = `Create${entityName}CustomFieldsInput`;
+                const createCustomFieldsInputType = `Create${entityName}${CUSTOM_FIELDS_INPUT_TYPE_SUFFIX}`;
                 if (!schema.getType(createCustomFieldsInputType)) {
                     customFieldTypeDefs += `
                         input ${createCustomFieldsInputType} {
@@ -199,7 +202,7 @@ export function addGraphQLCustomFields(
 
         if (hasUpdateInputType) {
             if (writeableNonLocalizedFields.length) {
-                const updateCustomFieldsInputType = `Update${entityName}CustomFieldsInput`;
+                const updateCustomFieldsInputType = `Update${entityName}${CUSTOM_FIELDS_INPUT_TYPE_SUFFIX}`;
                 if (!schema.getType(updateCustomFieldsInputType)) {
                     customFieldTypeDefs += `
                         input ${updateCustomFieldsInputType} {
