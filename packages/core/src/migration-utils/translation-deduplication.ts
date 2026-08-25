@@ -16,12 +16,15 @@ import { QueryRunner } from 'typeorm';
  * including translation tables defined by plugins for their own custom translatable entities —
  * not just the 13 core tables shown below.
  *
- * Call this from your migration's `up()` method **before** the unique constraint on the
- * translation table(s) is created. `vendure migrate generate` will generate the DDL that
- * creates the constraints; you only need to add a `deduplicateTranslations` call ahead of it,
- * passing either a single table name or an array of table names. On Postgres this looks like
- * (constraint names are deterministic, so `vendure migrate generate` will produce these exact
- * names):
+ * **You normally do not need to call this yourself.** When `vendure migrate generate` detects that
+ * the generated migration adds the unique constraint to one or more translation tables, it inserts
+ * a `deduplicateTranslations` call for exactly those tables at the top of `up()`, ahead of the DDL.
+ * Call it manually only if you write migrations by hand, or if you split the generated migration and
+ * need the de-duplication to run ahead of a constraint in a separate file. It accepts either a
+ * single table name or an array of table names, and is a no-op for tables without duplicates.
+ *
+ * The generated migration looks like this on Postgres (constraint names are deterministic, so
+ * `vendure migrate generate` will produce these exact names):
  *
  * ```ts
  * import { MigrationInterface, QueryRunner } from 'typeorm';
@@ -29,7 +32,7 @@ import { QueryRunner } from 'typeorm';
  *
  * export class AddTranslationUniqueConstraints1234567890 implements MigrationInterface {
  *     public async up(queryRunner: QueryRunner): Promise<any> {
- *         // --- Remove any pre-existing duplicate rows across all core translation tables ---
+ *         // --- Inserted by `vendure migrate generate`: remove pre-existing duplicate rows ---
  *         await deduplicateTranslations(queryRunner, [
  *             'product_translation',
  *             'product_variant_translation',
@@ -44,8 +47,8 @@ import { QueryRunner } from 'typeorm';
  *             'promotion_translation',
  *             'region_translation',
  *             'shipping_method_translation',
- *             // Include any of your own custom translatable entities' tables here too, e.g.:
- *             // 'my_custom_entity_translation',
+ *             // Translation tables of your own plugins' translatable entities are included too,
+ *             // since they receive the same constraint.
  *         ]);
  *
  *         // --- Auto-generated DDL continues (Postgres) ---
@@ -75,8 +78,8 @@ import { QueryRunner } from 'typeorm';
  * instead looks like `` CREATE UNIQUE INDEX `UQ_dcc35f0d2b8d422634e878b813c` ON `product_translation`
  * (`languageCode`, `baseId`) `` (same deterministic names as above). On SQLite, adding a unique
  * constraint requires TypeORM to recreate the whole table, so the generated migration will
- * contain a much longer sequence of statements for each table — call `deduplicateTranslations`
- * before that generated block in the same way.
+ * contain a much longer sequence of statements for each table; the generated
+ * `deduplicateTranslations` call still precedes them.
  *
  * @docsCategory migration
  */
