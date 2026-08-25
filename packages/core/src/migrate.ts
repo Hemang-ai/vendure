@@ -422,12 +422,9 @@ function formatMigrationQuery(query: string, parameters: any[] | undefined, isMy
 const TRANSLATION_UNIQUE_COLUMNS = ['languageCode', 'baseId'];
 
 /**
- * Returns the names of the translation tables to which the given schema-builder `up` queries add
- * the `(languageCode, baseId)` unique constraint. A table qualifies when its entity metadata
- * carries that constraint (registered dynamically at bootstrap for every translation entity, core
- * or plugin-defined) and one of the queries both references the table and creates a unique
- * constraint or index over those columns. On SQLite the constraint is added by recreating the
- * table under a `temporary_` prefix, which is why that prefix is tolerated when matching.
+ * Returns the names of the translation tables (core or plugin-defined) to which the given
+ * schema-builder `up` queries add the `(languageCode, baseId)` unique constraint — i.e. the tables
+ * that need de-duplicating before this migration runs.
  *
  * Exported for testing.
  */
@@ -435,33 +432,33 @@ export function getTranslationTablesGainingUniqueConstraint(
     entityMetadatas: EntityMetadata[],
     upQueries: string[],
 ): string[] {
-    const tables: string[] = [];
-    for (const metadata of entityMetadatas) {
-        const uniqueColumnSets = [
-            ...metadata.uniques.map(unique => unique.columns),
-            ...metadata.indices.filter(index => index.isUnique).map(index => index.columns),
-        ].map(columns => columns.map(column => column.databaseName));
-        const hasTranslationUnique = uniqueColumnSets.some(
-            columns =>
-                columns.length === TRANSLATION_UNIQUE_COLUMNS.length &&
-                TRANSLATION_UNIQUE_COLUMNS.every(column => columns.includes(column)),
-        );
-        if (!hasTranslationUnique) {
-            continue;
-        }
-        const escapedTableName = metadata.tableName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const tableReference = new RegExp(`[\`"](temporary_)?${escapedTableName}[\`"]`);
-        const addsConstraint = upQueries.some(
-            query =>
-                tableReference.test(query) &&
-                /\bUNIQUE\b/i.test(query) &&
-                TRANSLATION_UNIQUE_COLUMNS.every(column => query.includes(column)),
-        );
-        if (addsConstraint) {
-            tables.push(metadata.tableName);
-        }
+    return entityMetadatas
+        .filter(isTranslationEntity)
+        .map(metadata => metadata.tableName)
+        .filter(tableName => upQueries.some(query => addsTranslationUniqueConstraint(query, tableName)));
+}
+
+function isTranslationEntity(metadata: EntityMetadata): boolean {
+    const columnNames = metadata.columns.map(column => column.databaseName);
+    return TRANSLATION_UNIQUE_COLUMNS.every(name => columnNames.includes(name));
+}
+
+/**
+ * Whether a DDL statement creates a unique constraint or index over `(languageCode, baseId)` on the
+ * given table. Works across dialects by looking at the quoted identifiers in the statement: Postgres
+ * emits `ALTER TABLE "t" ADD CONSTRAINT "UQ_x" UNIQUE ("languageCode", "baseId")`, MySQL emits
+ * `` ALTER TABLE `t` ADD UNIQUE INDEX `IDX_x` (`languageCode`, `baseId`) ``, and SQLite recreates the
+ * whole table as `CREATE TABLE "temporary_t" (... CONSTRAINT "UQ_x" UNIQUE ("languageCode", "baseId"))`.
+ */
+function addsTranslationUniqueConstraint(query: string, tableName: string): boolean {
+    if (!/\bUNIQUE\b/i.test(query)) {
+        return false;
     }
-    return tables;
+    const identifiers = new Set(Array.from(query.matchAll(/["`]([^"`]+)["`]/g), match => match[1]));
+    return (
+        (identifiers.has(tableName) || identifiers.has(`temporary_${tableName}`)) &&
+        TRANSLATION_UNIQUE_COLUMNS.every(name => identifiers.has(name))
+    );
 }
 
 /**

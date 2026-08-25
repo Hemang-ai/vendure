@@ -177,65 +177,48 @@ describe('shadow connection option helpers', () => {
 });
 
 /**
- * A minimal stand-in for TypeORM's EntityMetadata, carrying only what
- * getTranslationTablesGainingUniqueConstraint() reads.
+ * A minimal stand-in for TypeORM's EntityMetadata. Translation tables carry the
+ * `languageCode` and `baseId` columns; anything else is a non-translation table.
  */
-function metadataFor(tableName: string, uniqueColumns: string[][], uniqueIndexColumns: string[][] = []) {
-    return {
+function metadataFor(...tableNames: string[]) {
+    return tableNames.map(tableName => ({
         tableName,
-        uniques: uniqueColumns.map(columns => ({ columns: columns.map(databaseName => ({ databaseName })) })),
-        indices: uniqueIndexColumns.map(columns => ({
-            isUnique: true,
-            columns: columns.map(databaseName => ({ databaseName })),
-        })),
-    } as any;
+        columns: (tableName.endsWith('_translation') ? ['id', 'languageCode', 'baseId'] : ['id', 'slug']).map(
+            databaseName => ({ databaseName }),
+        ),
+    })) as any[];
 }
-
-const TRANSLATION_UNIQUE = [['languageCode', 'baseId']];
 
 describe('getTranslationTablesGainingUniqueConstraint()', () => {
     it('detects the Postgres ADD CONSTRAINT form', () => {
-        const tables = getTranslationTablesGainingUniqueConstraint(
-            [metadataFor('product_translation', TRANSLATION_UNIQUE)],
-            [
-                'ALTER TABLE "product_translation" ADD CONSTRAINT "UQ_dcc35f0d2b8d422634e878b813c" UNIQUE ("languageCode", "baseId")',
-            ],
-        );
+        const tables = getTranslationTablesGainingUniqueConstraint(metadataFor('product_translation'), [
+            'ALTER TABLE "product_translation" ADD CONSTRAINT "UQ_dcc35f0d2b8d422634e878b813c" UNIQUE ("languageCode", "baseId")',
+        ]);
         expect(tables).toEqual(['product_translation']);
     });
 
-    it('detects the MySQL unique index form (constraint stored as a unique index in metadata)', () => {
-        const tables = getTranslationTablesGainingUniqueConstraint(
-            [metadataFor('product_translation', [], TRANSLATION_UNIQUE)],
-            [
-                'ALTER TABLE `product_translation` ADD UNIQUE INDEX `IDX_dcc35f0d2b8d422634e878b813` (`languageCode`, `baseId`)',
-            ],
-        );
+    it('detects the MySQL unique index form', () => {
+        const tables = getTranslationTablesGainingUniqueConstraint(metadataFor('product_translation'), [
+            'ALTER TABLE `product_translation` ADD UNIQUE INDEX `IDX_dcc35f0d2b8d422634e878b813` (`languageCode`, `baseId`)',
+        ]);
         expect(tables).toEqual(['product_translation']);
     });
 
     it('detects the SQLite table-recreation form', () => {
-        const tables = getTranslationTablesGainingUniqueConstraint(
-            [metadataFor('product_translation', TRANSLATION_UNIQUE)],
-            [
-                'CREATE TABLE "temporary_product_translation" ("id" integer PRIMARY KEY AUTOINCREMENT NOT NULL, ' +
-                    '"languageCode" varchar NOT NULL, "baseId" integer, ' +
-                    'CONSTRAINT "UQ_dcc35f0d2b8d422634e878b813c" UNIQUE ("languageCode", "baseId"))',
-                'INSERT INTO "temporary_product_translation"("id", "languageCode", "baseId") SELECT "id", "languageCode", "baseId" FROM "product_translation"',
-                'DROP TABLE "product_translation"',
-                'ALTER TABLE "temporary_product_translation" RENAME TO "product_translation"',
-            ],
-        );
+        const tables = getTranslationTablesGainingUniqueConstraint(metadataFor('product_translation'), [
+            'CREATE TABLE "temporary_product_translation" ("id" integer PRIMARY KEY AUTOINCREMENT NOT NULL, ' +
+                '"languageCode" varchar NOT NULL, "baseId" integer, ' +
+                'CONSTRAINT "UQ_dcc35f0d2b8d422634e878b813c" UNIQUE ("languageCode", "baseId"))',
+            'INSERT INTO "temporary_product_translation"("id", "languageCode", "baseId") SELECT "id", "languageCode", "baseId" FROM "product_translation"',
+            'DROP TABLE "product_translation"',
+            'ALTER TABLE "temporary_product_translation" RENAME TO "product_translation"',
+        ]);
         expect(tables).toEqual(['product_translation']);
     });
 
     it('only returns tables whose constraint is actually added by this migration', () => {
         const tables = getTranslationTablesGainingUniqueConstraint(
-            [
-                metadataFor('product_translation', TRANSLATION_UNIQUE),
-                metadataFor('collection_translation', TRANSLATION_UNIQUE),
-                metadataFor('my_plugin_entity_translation', TRANSLATION_UNIQUE),
-            ],
+            metadataFor('product_translation', 'collection_translation', 'my_plugin_entity_translation'),
             [
                 'ALTER TABLE "collection_translation" ADD CONSTRAINT "UQ_x" UNIQUE ("languageCode", "baseId")',
                 'ALTER TABLE "my_plugin_entity_translation" ADD CONSTRAINT "UQ_y" UNIQUE ("languageCode", "baseId")',
@@ -245,29 +228,37 @@ describe('getTranslationTablesGainingUniqueConstraint()', () => {
         expect(tables).toEqual(['collection_translation', 'my_plugin_entity_translation']);
     });
 
-    it('ignores entities whose unique constraints are not the translation constraint', () => {
-        const tables = getTranslationTablesGainingUniqueConstraint(
-            [metadataFor('product', [['slug', 'channelId']])],
-            ['ALTER TABLE "product" ADD CONSTRAINT "UQ_z" UNIQUE ("slug", "channelId")'],
-        );
+    it('ignores unique constraints over other columns', () => {
+        const tables = getTranslationTablesGainingUniqueConstraint(metadataFor('product'), [
+            'ALTER TABLE "product" ADD CONSTRAINT "UQ_z" UNIQUE ("slug", "channelId")',
+        ]);
         expect(tables).toEqual([]);
     });
 
     it('ignores other unique constraints on a translation table', () => {
-        const tables = getTranslationTablesGainingUniqueConstraint(
-            [metadataFor('product_translation', TRANSLATION_UNIQUE)],
-            ['ALTER TABLE "product_translation" ADD CONSTRAINT "UQ_slug" UNIQUE ("slug")'],
-        );
+        const tables = getTranslationTablesGainingUniqueConstraint(metadataFor('product_translation'), [
+            'ALTER TABLE "product_translation" ADD CONSTRAINT "UQ_slug" UNIQUE ("slug")',
+        ]);
         expect(tables).toEqual([]);
     });
 
-    it('matches whole table names only', () => {
+    it('ignores non-translation tables referenced by a translation table recreation (e.g. via FOREIGN KEY)', () => {
         const tables = getTranslationTablesGainingUniqueConstraint(
-            [metadataFor('product_translation', TRANSLATION_UNIQUE)],
+            metadataFor('product', 'product_translation'),
             [
-                'ALTER TABLE "custom_product_translation" ADD CONSTRAINT "UQ_q" UNIQUE ("languageCode", "baseId")',
+                'CREATE TABLE "temporary_product_translation" ("id" integer PRIMARY KEY AUTOINCREMENT NOT NULL, ' +
+                    '"languageCode" varchar NOT NULL, "baseId" integer, ' +
+                    'CONSTRAINT "UQ_dcc35f0d2b8d422634e878b813c" UNIQUE ("languageCode", "baseId"), ' +
+                    'CONSTRAINT "FK_x" FOREIGN KEY ("baseId") REFERENCES "product" ("id") ON DELETE NO ACTION)',
             ],
         );
+        expect(tables).toEqual(['product_translation']);
+    });
+
+    it('matches whole table names only', () => {
+        const tables = getTranslationTablesGainingUniqueConstraint(metadataFor('product_translation'), [
+            'ALTER TABLE "custom_product_translation" ADD CONSTRAINT "UQ_q" UNIQUE ("languageCode", "baseId")',
+        ]);
         expect(tables).toEqual([]);
     });
 });
