@@ -188,7 +188,7 @@ export function registerCustomFieldsForEntity(
                         // to the same database column as the relation's join column.
                         EntityId({ nullable: true })(instance, `${name}Id`);
                         if (indexed) {
-                            Index()(instance, name);
+                            registerIndex(instance, name);
                         }
                     }
                 } else {
@@ -259,9 +259,9 @@ export function registerCustomFieldsForEntity(
                         // The MySQL driver seems to work differently and will only apply a unique
                         // constraint if an index is defined on the column. For postgres/sqlite it is
                         // sufficient to add the `unique: true` property to the column options.
-                        Index({ unique: true })(instance, name);
+                        registerIndex(instance, name, true);
                     } else if (indexed && customField.unique !== true) {
-                        Index()(instance, name);
+                        registerIndex(instance, name);
                     }
                 }
             };
@@ -294,6 +294,30 @@ export function registerCustomFieldsForEntity(
                         'A work-around needed when only relational custom fields are defined on an entity',
                 })(instance, '__fix_relational_custom_fields__');
             }
+        }
+    }
+}
+
+/**
+ * Custom-field metadata can be registered more than once when the test bootstrap lifecycle
+ * initializes and then bootstraps the same configuration. TypeORM stores decorator metadata
+ * globally, so avoid adding the same single-column index twice.
+ */
+function registerIndex(instance: object, propertyName: string, unique = false): void {
+    const target = instance.constructor;
+    const alreadyRegistered = getMetadataArgsStorage().indices.some(
+        index =>
+            index.target === target &&
+            Array.isArray(index.columns) &&
+            index.columns.length === 1 &&
+            index.columns[0] === propertyName &&
+            Boolean(index.unique) === unique,
+    );
+    if (!alreadyRegistered) {
+        if (unique) {
+            Index({ unique: true })(instance, propertyName);
+        } else {
+            Index()(instance, propertyName);
         }
     }
 }

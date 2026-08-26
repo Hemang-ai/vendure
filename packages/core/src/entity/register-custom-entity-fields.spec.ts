@@ -412,6 +412,7 @@ describe('registerCustomFieldsForEntity() indexes', () => {
         'registers one non-unique scalar index for %s',
         dbEngine => {
             register(dbEngine, [{ name: 'reference', type: 'string', index: true }]);
+            register(dbEngine, [{ name: 'reference', type: 'string', index: true }]);
 
             const indices = getTestIndices('reference');
             expect(indices).toHaveLength(1);
@@ -422,6 +423,7 @@ describe('registerCustomFieldsForEntity() indexes', () => {
     it.each(['mysql', 'mariadb', 'postgres', 'sqlite'] as const)(
         'does not duplicate a unique index for %s',
         dbEngine => {
+            register(dbEngine, [{ name: 'reference', type: 'string', unique: true, index: true }]);
             register(dbEngine, [{ name: 'reference', type: 'string', unique: true, index: true }]);
 
             const indices = getTestIndices('reference');
@@ -437,14 +439,16 @@ describe('registerCustomFieldsForEntity() indexes', () => {
     it.each(['mysql', 'mariadb', 'postgres', 'sqlite'] as const)(
         'registers the index on a single relation property for %s',
         dbEngine => {
-            register(dbEngine, [
+            const fields: CustomFieldConfig[] = [
                 {
                     name: 'related',
                     type: 'relation',
                     entity: RelatedEntity,
                     index: true,
                 },
-            ]);
+            ];
+            register(dbEngine, fields);
+            register(dbEngine, fields);
 
             const indices = getTestIndices('related');
             expect(indices).toHaveLength(1);
